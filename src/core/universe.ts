@@ -37,6 +37,8 @@ export interface UniverseConfig {
   noiseRate: number;
   /** 資源再生率（外部エネルギー入力を表す） */
   resourceRegenerationRate: number;
+  /** 廃熱放散率（宇宙への放散） */
+  wasteHeatRadiationRate: number;
 }
 
 /**
@@ -47,7 +49,8 @@ export const DEFAULT_UNIVERSE_CONFIG: UniverseConfig = {
   seed: 12345,
   entropyRate: 0.001,
   noiseRate: 0.1,
-  resourceRegenerationRate: 0.01,
+  resourceRegenerationRate: 0.008,  // バランス調整
+  wasteHeatRadiationRate: 0.3,
 };
 
 /**
@@ -198,14 +201,14 @@ export class Universe {
   }
 
   /**
-   * エネルギーをノードに散逸させる（エネルギー保存則）
-   * 行動コストや維持コストは消滅せず、環境に熱として放出される
+   * エネルギーを廃熱としてノードに散逸させる（エネルギー保存則）
+   * 行動コストや維持コストは消滅せず、廃熱として蓄積される
+   * 廃熱は採取不可で、徐々に宇宙に放散される
    */
   private dissipateEnergyToNode(nodeId: NodeId, amount: number): void {
     const node = this.space.getNode(nodeId);
     if (node) {
-      const currentEnergy = node.resources.get(ResourceType.Energy) ?? 0;
-      node.resources.set(ResourceType.Energy, currentEnergy + amount);
+      node.wasteHeat += amount;
     }
   }
 
@@ -269,6 +272,26 @@ export class Universe {
         artifactId,
         tick: this.time.getTick(),
       });
+    }
+    
+    // 廃熱の宇宙への放散（熱力学第二法則）
+    this.radiateWasteHeat();
+  }
+
+  /**
+   * 廃熱を宇宙に放散する
+   * 熱力学第二法則: 廃熱は徐々に宇宙空間に放散され、系から消滅する
+   * これにより、エネルギーは保存されつつも、利用可能なエネルギーは減少する
+   */
+  private radiateWasteHeat(): void {
+    const radiationRate = this.config.wasteHeatRadiationRate ?? 0.1;
+    
+    for (const node of this.space.getAllNodes()) {
+      if (node.wasteHeat > 0) {
+        const radiated = node.wasteHeat * radiationRate;
+        node.wasteHeat -= radiated;
+        // 放散されたエネルギーは系から消滅（宇宙空間へ）
+      }
     }
   }
 

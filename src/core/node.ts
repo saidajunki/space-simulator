@@ -37,8 +37,10 @@ export interface Node {
   entityIds: Set<EntityId>;
   /** このノードに存在するアーティファクトのID */
   artifactIds: Set<ArtifactId>;
-  /** 現在の資源量 */
+  /** 現在の資源量（採取可能なfreeEnergy含む） */
   resources: Map<ResourceType, number>;
+  /** 廃熱（採取不可、徐々に宇宙に放散） */
+  wasteHeat: number;
 }
 
 /**
@@ -86,5 +88,6 @@ export function createNode(params: CreateNodeParams): Node {
     entityIds: new Set(),
     artifactIds: new Set(),
     resources,
+    wasteHeat: 0,
   };
 }

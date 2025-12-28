@@ -130,16 +130,15 @@ export class EntropyEngine {
 
   /**
    * 維持コストの適用
-   * エネルギー保存則: 維持コストは環境（ノード資源）に散逸する
+   * エネルギー保存則: 維持コストは廃熱として環境に散逸する
    */
   applyMaintenanceCost(entity: Entity, node: Node | undefined): number {
     const cost = this.config.maintenanceCost;
     entity.energy -= cost;
     
-    // エネルギー保存則: 維持コストは環境に散逸（熱として放出）
+    // エネルギー保存則: 維持コストは廃熱として散逸
     if (node) {
-      const currentEnergy = node.resources.get(ResourceType.Energy) ?? 0;
-      node.resources.set(ResourceType.Energy, currentEnergy + cost);
+      node.wasteHeat += cost;
     }
     
     return cost;
