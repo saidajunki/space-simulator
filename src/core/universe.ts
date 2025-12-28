@@ -198,6 +198,18 @@ export class Universe {
   }
 
   /**
+   * エネルギーをノードに散逸させる（エネルギー保存則）
+   * 行動コストや維持コストは消滅せず、環境に熱として放出される
+   */
+  private dissipateEnergyToNode(nodeId: NodeId, amount: number): void {
+    const node = this.space.getNode(nodeId);
+    if (node) {
+      const currentEnergy = node.resources.get(ResourceType.Energy) ?? 0;
+      node.resources.set(ResourceType.Energy, currentEnergy + amount);
+    }
+  }
+
+  /**
    * 資源再生（外部エネルギー入力を表す）
    * 物理的必要性: 閉鎖系ではエントロピー増大により必ず死滅する。
    * 持続可能なシステムには外部からのエネルギー入力が必要（太陽光など）。
@@ -393,10 +405,14 @@ export class Universe {
     
     if (!skipCostDeduction) {
       if (entity.energy < cost) {
-        entity.energy -= 0.1; // アイドルコスト
+        // アイドルコストも環境に散逸
+        entity.energy -= 0.1;
+        this.dissipateEnergyToNode(entity.nodeId, 0.1);
         return;
       }
       entity.energy -= cost;
+      // エネルギー保存則: 行動コストは環境に散逸（熱として放出）
+      this.dissipateEnergyToNode(entity.nodeId, cost);
     }
 
     switch (action.type) {
@@ -569,6 +585,14 @@ export class Universe {
         node.entityIds.add(result.child.id);
       }
       
+      // エネルギー保存則: 複製コストは環境に散逸（子への移転分は保存される）
+      // 注: energyConsumed = energyCost + childEnergy だが、childEnergyは子に移転されるので
+      // 環境に散逸するのはenergyCostのみ
+      const dissipatedEnergy = result.energyConsumed - (result.child.energy ?? 0);
+      if (dissipatedEnergy > 0) {
+        this.dissipateEnergyToNode(entity.nodeId, dissipatedEnergy);
+      }
+      
       this.logEvent({
         type: 'entityCreated',
         entityId: result.child.id,
@@ -599,6 +623,8 @@ export class Universe {
 
     if (result.success && result.artifact) {
       entity.energy -= result.energyConsumed;
+      // エネルギー保存則: Artifact生成コストは環境に散逸
+      this.dissipateEnergyToNode(entity.nodeId, result.energyConsumed);
       this.logEvent({
         type: 'artifactCreated',
         artifactId: result.artifact.id,
