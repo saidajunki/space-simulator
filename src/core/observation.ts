@@ -16,6 +16,7 @@ export type SimulationEvent =
   | { type: 'replication'; parentId: EntityId; childId: EntityId; tick: number }
   | { type: 'artifactCreated'; artifactId: string; nodeId: NodeId; tick: number }
   | { type: 'artifactDecayed'; artifactId: string; tick: number }
+  | { type: 'harvest'; entityId: EntityId; nodeId: NodeId; amount: number; tick: number }
   | { type: 'disaster'; nodeId: NodeId; disasterType: string; tick: number }
   | { type: 'guardrailIntervention'; intervention: string; tick: number };
 

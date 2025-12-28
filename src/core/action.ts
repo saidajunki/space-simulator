@@ -55,6 +55,14 @@ export interface ReadArtifactAction {
 }
 
 /**
+ * 資源採取行動
+ */
+export interface HarvestAction {
+  type: 'harvest';
+  amount: number;
+}
+
+/**
  * 待機行動
  */
 export interface IdleAction {
@@ -71,6 +79,7 @@ export type Action =
   | ReplicateAction
   | CreateArtifactAction
   | ReadArtifactAction
+  | HarvestAction
   | IdleAction;
 
 /**
@@ -110,6 +119,8 @@ export interface ActionCosts {
   createArtifact: number;
   /** アーティファクト読み取りコスト */
   readArtifact: number;
+  /** 資源採取コスト */
+  harvest: number;
   /** 待機コスト（生存コスト） */
   idle: number;
 }
@@ -125,7 +136,8 @@ export const DEFAULT_ACTION_COSTS: ActionCosts = {
   replicate: 50,
   createArtifact: 10,
   readArtifact: 1,
-  idle: 1,
+  harvest: 0.5,
+  idle: 0.5,
 };
 
 /**
@@ -149,6 +161,8 @@ export function calculateActionCost(
       return costs.createArtifact;
     case 'readArtifact':
       return costs.readArtifact;
+    case 'harvest':
+      return costs.harvest;
     case 'idle':
       return costs.idle;
   }
@@ -173,6 +187,8 @@ export function actionToString(action: Action): string {
       return `create artifact`;
     case 'readArtifact':
       return `read artifact ${action.artifactId}`;
+    case 'harvest':
+      return `harvest ${action.amount} energy`;
     case 'idle':
       return `idle`;
   }

@@ -10,13 +10,12 @@ import { Entity } from './entity.js';
 import { Artifact, ArtifactManager } from './artifact.js';
 import { EntropyEngine } from './entropy.js';
 import { TransitSystem } from './transit.js';
-import { TransitItem } from './edge.js';
 import { EnergySystem } from './energy.js';
 import { perceive, Perception } from './perception.js';
 import { InteractionEngine } from './interaction.js';
 import { ReplicationEngine } from './replication.js';
 import { WorldGenerator, WorldGenConfig } from './world-generator.js';
-import { EntityId, NodeId, ArtifactId } from './types.js';
+import { EntityId, NodeId, ArtifactId, ResourceType } from './types.js';
 import { GeneIndex } from './behavior-rule.js';
 import { Action } from './action.js';
 import { SimulationEvent, SimulationStats } from './observation.js';
@@ -33,6 +32,8 @@ export interface UniverseConfig {
   entropyRate: number;
   /** ノイズ率 */
   noiseRate: number;
+  /** 資源再生率（外部エネルギー入力を表す） */
+  resourceRegenerationRate: number;
 }
 
 /**
@@ -43,6 +44,7 @@ export const DEFAULT_UNIVERSE_CONFIG: UniverseConfig = {
   seed: 12345,
   entropyRate: 0.001,
   noiseRate: 0.1,
+  resourceRegenerationRate: 0.01,
 };
 
 /**
@@ -113,13 +115,16 @@ export class Universe {
     // 2. 移動中アイテムの到着処理
     this.processTransitArrivals(tick);
 
-    // 3. エントロピー適用
+    // 3. 資源再生（外部エネルギー入力）
+    this.regenerateResources();
+
+    // 4. エントロピー適用
     this.applyEntropy();
 
-    // 4. 各Entityの行動
+    // 5. 各Entityの行動
     this.processEntityActions(tick);
 
-    // 5. 死亡判定
+    // 6. 死亡判定
     this.processDeaths(tick);
   }
 
@@ -165,6 +170,26 @@ export class Universe {
             to: item.to,
             tick,
           });
+        }
+      }
+    }
+  }
+
+  /**
+   * 資源再生（外部エネルギー入力を表す）
+   * 物理的必要性: 閉鎖系ではエントロピー増大により必ず死滅する。
+   * 持続可能なシステムには外部からのエネルギー入力が必要（太陽光など）。
+   */
+  private regenerateResources(): void {
+    const rate = this.config.resourceRegenerationRate;
+    
+    for (const node of this.space.getAllNodes()) {
+      for (const [type, capacity] of node.attributes.resourceCapacity) {
+        const current = node.resources.get(type) ?? 0;
+        if (current < capacity) {
+          // 容量に向かって緩やかに回復（外部入力）
+          const regeneration = (capacity - current) * rate;
+          node.resources.set(type, current + regeneration);
         }
       }
     }
@@ -243,24 +268,33 @@ export class Universe {
   private decideAction(entity: Entity, perception: Perception): Action {
     const genes = entity.behaviorRule;
     
-    // エネルギーが低い → 資源を探す（移動）
+    // エネルギーが低い → まず現在地で資源採取を試みる
     const hungerThreshold = genes.getGene(GeneIndex.HungerThreshold) * 100;
-    if (entity.energy < hungerThreshold && perception.neighborNodes.length > 0) {
-      // 資源が多いノードを探す
-      let bestNode = perception.neighborNodes[0];
-      let bestResources = 0;
-      for (const node of perception.neighborNodes) {
-        let total = 0;
-        for (const amount of node.resources.values()) {
-          total += amount;
-        }
-        if (total > bestResources) {
-          bestResources = total;
-          bestNode = node;
-        }
+    if (entity.energy < hungerThreshold) {
+      // 現在のノードに資源があれば採取
+      if (perception.currentNode.resources.get(ResourceType.Energy) ?? 0 > 0) {
+        const harvestAmount = Math.min(20, perception.currentNode.resources.get(ResourceType.Energy) ?? 0);
+        return { type: 'harvest', amount: harvestAmount };
       }
-      if (bestNode) {
-        return { type: 'move', targetNode: bestNode.id };
+      
+      // 資源がなければ移動
+      if (perception.neighborNodes.length > 0) {
+        // 資源が多いノードを探す
+        let bestNode = perception.neighborNodes[0];
+        let bestResources = 0;
+        for (const node of perception.neighborNodes) {
+          let total = 0;
+          for (const amount of node.resources.values()) {
+            total += amount;
+          }
+          if (total > bestResources) {
+            bestResources = total;
+            bestNode = node;
+          }
+        }
+        if (bestNode) {
+          return { type: 'move', targetNode: bestNode.id };
+        }
       }
     }
 
@@ -298,6 +332,12 @@ export class Universe {
       return { type: 'createArtifact', data: entity.state.getData() };
     }
 
+    // デフォルト: 資源があれば採取、なければ待機
+    const currentEnergy = perception.currentNode.resources.get(ResourceType.Energy) ?? 0;
+    if (currentEnergy > 0) {
+      return { type: 'harvest', amount: Math.min(10, currentEnergy) };
+    }
+
     return { type: 'idle' };
   }
 
@@ -325,6 +365,9 @@ export class Universe {
         break;
       case 'createArtifact':
         this.executeCreateArtifact(entity, action.data, tick);
+        break;
+      case 'harvest':
+        this.executeHarvest(entity, action.amount, tick);
         break;
       case 'idle':
       default:
@@ -422,6 +465,25 @@ export class Universe {
         type: 'artifactCreated',
         artifactId: result.artifact.id,
         nodeId: entity.nodeId,
+        tick,
+      });
+    }
+  }
+
+  /**
+   * 資源採取実行
+   */
+  private executeHarvest(entity: Entity, amount: number, tick: number): void {
+    const node = this.space.getNode(entity.nodeId);
+    if (!node) return;
+
+    const harvested = this.energySystem.harvestFromNode(entity, node, amount);
+    if (harvested > 0) {
+      this.logEvent({
+        type: 'harvest',
+        entityId: entity.id,
+        nodeId: entity.nodeId,
+        amount: harvested,
         tick,
       });
     }
