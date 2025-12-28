@@ -84,14 +84,14 @@ TypeScript（Node.js）
     - **Property 11: Perception Locality**
     - **Validates: Requirements 5.1, 5.4**
 
-- [ ] 8. エネルギーシステムの実装
-  - [ ] 8.1 エネルギー消費の実装
+- [x] 8. エネルギーシステムの実装
+  - [x] 8.1 エネルギー消費の実装
     - 行動コスト、移動コスト（距離比例）
     - _Requirements: 3.2, 4.1_
-  - [ ] 8.2 エネルギー保存則の実装
+  - [x] 8.2 エネルギー保存則の実装
     - 総エネルギー追跡、移動/変換
     - _Requirements: 3.4, 3.5_
-  - [ ] 8.3 エネルギー枯渇処理の実装
+  - [x] 8.3 エネルギー枯渇処理の実装
     - エネルギーゼロで消滅
     - _Requirements: 3.3_
   - [ ]* 8.4 エネルギーのプロパティテスト
@@ -101,30 +101,30 @@ TypeScript（Node.js）
     - **Property 9: Distance-Proportional Cost**
     - **Validates: Requirements 3.2, 3.3, 3.4, 3.5, 4.1**
 
-- [ ] 9. Checkpoint - エネルギーシステム完了
+- [x] 9. Checkpoint - エネルギーシステム完了
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 10. 遅延と輸送の実装
-  - [ ] 10.1 TransitItemの実装
+- [x] 10. 遅延と輸送の実装
+  - [x] 10.1 TransitItemの実装
     - 移動中の物資/情報/エンティティ
     - _Requirements: 4.4, 4.5_
-  - [ ] 10.2 遅延処理の実装
+  - [x] 10.2 遅延処理の実装
     - 距離に応じた遅延、到着処理
     - _Requirements: 4.2, 4.3, 4.4, 4.5_
   - [ ]* 10.3 遅延のプロパティテスト
     - **Property 10: Transit Delay**
     - **Validates: Requirements 4.4, 4.5**
 
-- [ ] 11. 相互作用の実装
-  - [ ] 11.1 InteractionEngineの実装
+- [x] 11. 相互作用の実装
+  - [x] 11.1 InteractionEngineの実装
     - 同一ノードでの相互作用、状態変化、エネルギー移動
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6_
   - [ ]* 11.2 相互作用のプロパティテスト
     - **Property 17: Same-Node Interaction**
     - **Validates: Requirements 10.1**
 
-- [ ] 12. 複製と継承の実装
-  - [ ] 12.1 ReplicationEngineの実装
+- [-] 12. 複製と継承の実装
+  - [x] 12.1 ReplicationEngineの実装
     - 単独複製、協力複製、エネルギー消費、継承、変異
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6_
   - [ ]* 12.2 複製のプロパティテスト
