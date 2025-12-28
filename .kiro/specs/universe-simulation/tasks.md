@@ -178,54 +178,54 @@ TypeScript（Node.js）
 - [x] 19. Checkpoint - シミュレーションループ完了
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 20. 観測とログの実装
-  - [ ] 20.1 EventLoggerの実装
+- [x] 20. 観測とログの実装
+  - [x] 20.1 EventLoggerの実装
     - イベントログ（append-only）
     - _Requirements: 2.4, 14.1_
-  - [ ] 20.2 StatsAggregatorの実装
+  - [x] 20.2 StatsAggregatorの実装
     - 統計集計
     - _Requirements: 14.2_
-  - [ ] 20.3 PatternDetectorの実装
+  - [x] 20.3 PatternDetectorの実装
     - クラスタ検出、周期性検出
     - _Requirements: 14.3_
   - [ ]* 20.4 観測のプロパティテスト
     - **Property 23: Event Logging Completeness**
     - **Validates: Requirements 2.4, 14.1**
 
-- [ ] 21. スナップショットの実装
-  - [ ] 21.1 スナップショット保存の実装
+- [x] 21. スナップショットの実装
+  - [x] 21.1 スナップショット保存の実装
     - 状態のシリアライズ
     - _Requirements: 15.6_
-  - [ ] 21.2 スナップショット復元の実装
+  - [x] 21.2 スナップショット復元の実装
     - 状態のデシリアライズ
     - _Requirements: 15.6_
   - [ ]* 21.3 スナップショットのプロパティテスト
     - **Property 24: Snapshot Round-Trip**
     - **Validates: Requirements 15.6**
 
-- [ ] 22. Checkpoint - 観測とスナップショット完了
+- [x] 22. Checkpoint - 観測とスナップショット完了
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 23. Runnerの実装
-  - [ ] 23.1 RunInputの実装
+- [x] 23. Runnerの実装
+  - [x] 23.1 RunInputの実装
     - 入力仕様の定義
     - _Requirements: 15.1, 15.2_
-  - [ ] 23.2 RunOutputの実装
+  - [x] 23.2 RunOutputの実装
     - 出力仕様の定義（manifest.json, events.log, metrics.parquet, snapshots/）
     - _Requirements: 14.4_
-  - [ ] 23.3 LocalRunnerの実装
+  - [x] 23.3 LocalRunnerの実装
     - CLIで1Runが回る
     - _Requirements: 15.3, 15.4, 15.5_
 
-- [ ] 24. シミュレーション制御の実装
-  - [ ] 24.1 一時停止/再開の実装
+- [x] 24. シミュレーション制御の実装
+  - [x] 24.1 一時停止/再開の実装
     - _Requirements: 15.3, 15.4_
-  - [ ] 24.2 速度変更の実装
+  - [x] 24.2 速度変更の実装
     - _Requirements: 15.5_
-  - [ ] 24.3 seed指定実行の実装
+  - [x] 24.3 seed指定実行の実装
     - _Requirements: 15.7_
 
-- [ ] 25. Checkpoint - Runner完了
+- [x] 25. Checkpoint - Runner完了
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 26. ガードレールの実装
@@ -247,15 +247,15 @@ TypeScript（Node.js）
 - [ ] 28. Checkpoint - ガードレールとストレージ完了
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 29. CLI実装
-  - [ ] 29.1 runコマンドの実装
+- [x] 29. CLI実装
+  - [x] 29.1 runコマンドの実装
     - 単一Run実行
     - _Requirements: 15.1_
-  - [ ] 29.2 batchコマンドの実装
+  - [x] 29.2 batchコマンドの実装
     - 並列実行（seed違い）
     - _Requirements: 15.1_
 
-- [ ] 30. Final Checkpoint - 全機能完了
+- [x] 30. Final Checkpoint - 全機能完了
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
