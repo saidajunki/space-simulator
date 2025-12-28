@@ -76,13 +76,13 @@ export class EnergySystem {
   /**
    * 行動のエネルギーコストを計算
    */
-  calculateCost(action: Action, space: Space, fromNode: NodeId, toNode?: NodeId): number {
+  calculateCost(action: Action, space: Space, fromNode: NodeId, toNode?: NodeId, entity?: Entity): number {
     let distance = 1;
     if (action.type === 'move' && toNode) {
       const edge = space.getEdgeBetween(fromNode, toNode);
       distance = edge?.attributes.distance ?? 1;
     }
-    return calculateActionCost(action, this.config.actionCosts, distance);
+    return calculateActionCost(action, this.config.actionCosts, distance, entity);
   }
 
   /**

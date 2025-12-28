@@ -273,6 +273,11 @@ export class Universe {
     }
     
     for (const entity of entityList) {
+      // ゾンビ防止: 反応等で削除された個体はスキップ
+      if (!this.entities.has(entity.id)) {
+        continue;
+      }
+      
       // 知覚
       const perception = perceive(
         entity,
@@ -377,13 +382,22 @@ export class Universe {
    * 行動実行
    */
   private executeAction(entity: Entity, action: Action, tick: number): void {
-    // 行動コスト計算
-    const cost = this.energySystem.calculateCost(action, this.space, entity.nodeId);
-    if (entity.energy < cost) {
-      entity.energy -= 0.1; // アイドルコスト
-      return;
+    // 移動の場合はターゲットノードを取得
+    const targetNode = action.type === 'move' ? action.targetNode : undefined;
+    
+    // 行動コスト計算（entityを渡して質量ベースのコストを有効化）
+    const cost = this.energySystem.calculateCost(action, this.space, entity.nodeId, targetNode, entity);
+    
+    // replicate と createArtifact は内部でコスト処理するため、ここでは減算しない
+    const skipCostDeduction = action.type === 'replicate' || action.type === 'createArtifact';
+    
+    if (!skipCostDeduction) {
+      if (entity.energy < cost) {
+        entity.energy -= 0.1; // アイドルコスト
+        return;
+      }
+      entity.energy -= cost;
     }
-    entity.energy -= cost;
 
     switch (action.type) {
       case 'move':
