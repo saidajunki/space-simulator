@@ -10,8 +10,8 @@ TypeScript（Node.js）
 
 ## Tasks
 
-- [ ] 1. プロジェクト初期設定
-  - [ ] 1.1 TypeScriptプロジェクトの初期化
+- [x] 1. プロジェクト初期設定
+  - [x] 1.1 TypeScriptプロジェクトの初期化
     - package.json、tsconfig.json、eslint設定
     - 依存関係: fast-check（プロパティテスト）、vitest（テスト）
     - _Requirements: 15.1_
@@ -19,19 +19,19 @@ TypeScript（Node.js）
     - GitHub Actions for テスト実行
     - _Requirements: 15.1_
 
-- [ ] 2. Coreデータモデルの実装
-  - [ ] 2.1 基本型の定義
+- [x] 2. Coreデータモデルの実装
+  - [x] 2.1 基本型の定義
     - NodeId, EdgeId, EntityId, ArtifactId
     - TerrainType, ResourceType
     - _Requirements: 1.1, 1.2, 1.3_
-  - [ ] 2.2 Node/Edgeの実装
+  - [x] 2.2 Node/Edgeの実装
     - Node: id, attributes, entities, artifacts, resources
     - Edge: id, from, to, attributes, inTransit
     - _Requirements: 1.2, 1.3, 7.1, 7.6_
   - [ ]* 2.3 Node/Edgeのプロパティテスト
     - **Property 2: Node and Edge Attributes**
     - **Validates: Requirements 1.2, 1.3**
-  - [ ] 2.4 Spaceの実装
+  - [x] 2.4 Spaceの実装
     - グラフ構造、最短経路計算
     - _Requirements: 1.1, 1.4, 1.5_
   - [ ]* 2.5 Spaceのプロパティテスト
@@ -39,14 +39,14 @@ TypeScript（Node.js）
     - **Property 3: Shortest Path Correctness**
     - **Validates: Requirements 1.1, 1.4, 1.5**
 
-- [ ] 3. Checkpoint - データモデル完了
+- [x] 3. Checkpoint - データモデル完了
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. 時間管理とRNGの実装
-  - [ ] 4.1 TimeManagerの実装
+- [x] 4. 時間管理とRNGの実装
+  - [x] 4.1 TimeManagerの実装
     - 離散ステップ管理、tick記録
     - _Requirements: 2.1, 2.3_
-  - [ ] 4.2 RandomGeneratorの実装
+  - [x] 4.2 RandomGeneratorの実装
     - seed管理、再現可能な乱数生成
     - _Requirements: 2.5, 13.6_
   - [ ]* 4.3 時間とRNGのプロパティテスト
@@ -54,14 +54,14 @@ TypeScript（Node.js）
     - **Property 5: Seed Reproducibility**
     - **Validates: Requirements 2.1, 2.3, 2.5, 13.6**
 
-- [ ] 5. Entityの実装
-  - [ ] 5.1 Entity基本構造の実装
+- [x] 5. Entityの実装
+  - [x] 5.1 Entity基本構造の実装
     - id, nodeId, energy, state, behaviorRule, age
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
-  - [ ] 5.2 InternalStateの実装
+  - [x] 5.2 InternalStateの実装
     - 有限容量の可変データ構造
     - _Requirements: 7.5, 8.4_
-  - [ ] 5.3 BehaviorRuleの実装
+  - [x] 5.3 BehaviorRuleの実装
     - 遺伝子ベースの行動決定、継承、変異
     - _Requirements: 8.5, 11.2, 11.3_
   - [ ]* 5.4 Entityのプロパティテスト
@@ -70,14 +70,14 @@ TypeScript（Node.js）
     - **Property 16: Entity Structure Completeness**
     - **Validates: Requirements 7.5, 8.1-8.6**
 
-- [ ] 6. Checkpoint - Entity完了
+- [x] 6. Checkpoint - Entity完了
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. 知覚と行動の実装
-  - [ ] 7.1 Perceptionの実装
+- [x] 7. 知覚と行動の実装
+  - [x] 7.1 Perceptionの実装
     - 局所知覚、ノイズ付加
     - _Requirements: 5.1, 5.2, 5.3, 5.4_
-  - [ ] 7.2 Actionの実装
+  - [x] 7.2 Actionの実装
     - 移動、相互作用、変換、複製、アーティファクト生成
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7_
   - [ ]* 7.3 知覚のプロパティテスト
