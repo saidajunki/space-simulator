@@ -171,6 +171,18 @@ export class Universe {
       if (item.type === 'entity' && typeof item.payload === 'string') {
         const entity = this.entities.get(item.payload as EntityId);
         if (entity) {
+          // 元のノードからエンティティIDを削除
+          const fromNode = this.space.getNode(item.from);
+          if (fromNode) {
+            fromNode.entityIds.delete(entity.id);
+          }
+          
+          // 新しいノードにエンティティIDを追加
+          const toNode = this.space.getNode(item.to);
+          if (toNode) {
+            toNode.entityIds.add(entity.id);
+          }
+          
           entity.nodeId = item.to;
           this.logEvent({
             type: 'entityMoved',
@@ -456,6 +468,13 @@ export class Universe {
     // 反応を実行
     const { productsInfo } = this.reactionEngine.executeReaction(entity1, entity2, result);
 
+    // ノードからエンティティIDを削除
+    const node = this.space.getNode(entity1.nodeId);
+    if (node) {
+      node.entityIds.delete(entity1.id);
+      node.entityIds.delete(entity2.id);
+    }
+
     // 反応物を削除
     this.entities.delete(entity1.id);
     this.entities.delete(entity2.id);
@@ -484,6 +503,12 @@ export class Universe {
       }, this.rng);
       
       this.entities.set(newEntity.id, newEntity);
+      
+      // ノードにエンティティIDを追加
+      if (node) {
+        node.entityIds.add(newEntity.id);
+      }
+      
       this.logEvent({
         type: 'entityCreated',
         entityId: newEntity.id,
@@ -509,6 +534,13 @@ export class Universe {
 
     if (result.success && result.child) {
       this.entities.set(result.child.id, result.child);
+      
+      // ノードにエンティティIDを追加
+      const node = this.space.getNode(result.child.nodeId);
+      if (node) {
+        node.entityIds.add(result.child.id);
+      }
+      
       this.logEvent({
         type: 'entityCreated',
         entityId: result.child.id,
@@ -576,6 +608,13 @@ export class Universe {
     for (const [id, entity] of this.entities) {
       if (entity.energy <= 0) {
         toRemove.push(id);
+        
+        // ノードからエンティティIDを削除
+        const node = this.space.getNode(entity.nodeId);
+        if (node) {
+          node.entityIds.delete(entity.id);
+        }
+        
         this.logEvent({
           type: 'entityDied',
           entityId: id,

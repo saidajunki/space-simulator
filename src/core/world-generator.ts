@@ -270,6 +270,9 @@ export class WorldGenerator {
 
       const entity = createEntity(params, rng);
       entities.push(entity);
+      
+      // ノードにエンティティIDを登録
+      node.entityIds.add(entity.id);
     }
 
     return entities;
