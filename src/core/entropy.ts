@@ -7,6 +7,7 @@ import { EntityId, ArtifactId, EdgeId, NodeId, ResourceType } from './types.js';
 import { Entity } from './entity.js';
 import { Artifact } from './artifact.js';
 import { Edge } from './edge.js';
+import { Node } from './node.js';
 import { RandomGenerator } from './random.js';
 
 /**
@@ -129,10 +130,18 @@ export class EntropyEngine {
 
   /**
    * 維持コストの適用
+   * エネルギー保存則: 維持コストは環境（ノード資源）に散逸する
    */
-  applyMaintenanceCost(entity: Entity): number {
+  applyMaintenanceCost(entity: Entity, node: Node | undefined): number {
     const cost = this.config.maintenanceCost;
     entity.energy -= cost;
+    
+    // エネルギー保存則: 維持コストは環境に散逸（熱として放出）
+    if (node) {
+      const currentEnergy = node.resources.get(ResourceType.Energy) ?? 0;
+      node.resources.set(ResourceType.Energy, currentEnergy + cost);
+    }
+    
     return cost;
   }
 
@@ -144,6 +153,7 @@ export class EntropyEngine {
     artifacts: Artifact[],
     edges: Edge[],
     nodeResources: Map<NodeId, Map<ResourceType, number>>,
+    entityNodeMap: Map<EntityId, Node>,
     rng: RandomGenerator
   ): EntropyResult {
     const result: EntropyResult = {
@@ -159,7 +169,9 @@ export class EntropyEngine {
       if (this.degradeEntity(entity, rng)) {
         result.degradedEntities.push(entity.id);
       }
-      result.totalEnergyLoss += this.applyMaintenanceCost(entity);
+      // エネルギー保存則: 維持コストは環境に散逸
+      const node = entityNodeMap.get(entity.id);
+      result.totalEnergyLoss += this.applyMaintenanceCost(entity, node);
     }
 
     // Artifact劣化
@@ -176,7 +188,7 @@ export class EntropyEngine {
       }
     }
 
-    // 資源散逸
+    // 資源散逸（これは系外への散逸として許容 - 宇宙の膨張的な概念）
     for (const [nodeId, resources] of nodeResources) {
       const dissipated = this.dissipateResources(resources, rng);
       if (dissipated.size > 0) {

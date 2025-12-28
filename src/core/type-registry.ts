@@ -11,16 +11,20 @@ import { RandomGenerator } from './random.js';
 
 /**
  * 反応結果
+ * エネルギー保存則: energyDeltaは廃止し、質量変化から計算
  */
 export interface ReactionResult {
   /** 反応物のタイプリスト */
   reactants: number[];
   /** 生成物のタイプリスト */
   products: number[];
-  /** エネルギー変化（正=発熱、負=吸熱） */
-  energyDelta: number;
   /** 反応確率（0.0-1.0） */
   probability: number;
+  /** 
+   * @deprecated エネルギー保存則のため廃止。質量変化から計算する。
+   * 互換性のため残すが、使用しない。
+   */
+  energyDelta?: number;
 }
 
 /**
@@ -97,6 +101,7 @@ export class TypeRegistry {
 
   /**
    * 反応結果を生成（seed依存で決定論的）
+   * エネルギー保存則: energyDeltaは廃止、質量変化から計算
    */
   private generateReaction(type1: number, type2: number): ReactionResult {
     const reactants = [type1, type2].sort((a, b) => a - b);
@@ -106,7 +111,6 @@ export class TypeRegistry {
       return {
         reactants,
         products: [...reactants],  // 変化なし
-        energyDelta: 0,
         probability: 0,
       };
     }
@@ -128,7 +132,6 @@ export class TypeRegistry {
     return {
       reactants,
       products,
-      energyDelta: (this.rng.random() - 0.5) * 20,  // -10 to +10
       probability: 0.1 + this.rng.random() * 0.5,    // 0.1-0.6
     };
   }

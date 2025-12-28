@@ -16,6 +16,7 @@ import { InteractionEngine } from './interaction.js';
 import { ReplicationEngine } from './replication.js';
 import { WorldGenerator, WorldGenConfig } from './world-generator.js';
 import { EntityId, NodeId, ArtifactId, ResourceType } from './types.js';
+import { Node } from './node.js';
 import { GeneIndex } from './behavior-rule.js';
 import { Action } from './action.js';
 import { SimulationEvent, SimulationStats } from './observation.js';
@@ -225,16 +226,26 @@ export class Universe {
     const edges = this.space.getAllEdges();
     
     // ノードリソースを収集
-    const nodeResources = new Map<NodeId, Map<string, number>>();
+    const nodeResources = new Map<NodeId, Map<ResourceType, number>>();
     for (const node of this.space.getAllNodes()) {
-      nodeResources.set(node.id, node.resources as Map<string, number>);
+      nodeResources.set(node.id, node.resources);
+    }
+
+    // エンティティとノードのマッピングを作成（維持コストの散逸先）
+    const entityNodeMap = new Map<EntityId, Node>();
+    for (const entity of entities) {
+      const node = this.space.getNode(entity.nodeId);
+      if (node) {
+        entityNodeMap.set(entity.id, node);
+      }
     }
 
     const result = this.entropyEngine.applyEntropy(
       entities,
       artifacts,
       edges,
-      nodeResources as any,
+      nodeResources,
+      entityNodeMap,
       this.rng
     );
 
@@ -448,6 +459,7 @@ export class Universe {
 
   /**
    * 化学反応実行（公理21）
+   * エネルギー保存則: 質量-エネルギー変換に基づく
    */
   private executeReaction(
     entity1: Entity,
@@ -455,18 +467,20 @@ export class Universe {
     result: import('./type-registry.js').ReactionResult,
     tick: number
   ): void {
+    // 反応を実行
+    const { productsInfo, totalEnergyChange, massDelta } = this.reactionEngine.executeReaction(entity1, entity2, result);
+
     // 反応イベントをログ
     const reactionEvent = this.reactionEngine.createReactionEvent(
       tick,
       entity1.nodeId,
       entity1,
       entity2,
-      result
+      result,
+      massDelta,
+      totalEnergyChange
     );
     this.reactionLog.push(reactionEvent);
-
-    // 反応を実行
-    const { productsInfo } = this.reactionEngine.executeReaction(entity1, entity2, result);
 
     // ノードからエンティティIDを削除
     const node = this.space.getNode(entity1.nodeId);
@@ -601,6 +615,7 @@ export class Universe {
 
   /**
    * 死亡判定
+   * エネルギー保存則: 死亡時のエネルギーは環境（ノード資源）に返還
    */
   private processDeaths(tick: number): void {
     const toRemove: EntityId[] = [];
@@ -613,6 +628,9 @@ export class Universe {
         const node = this.space.getNode(entity.nodeId);
         if (node) {
           node.entityIds.delete(entity.id);
+          
+          // エネルギー保存則: 死亡時のエネルギーを環境に返還
+          this.energySystem.handleDeath(entity, node);
         }
         
         this.logEvent({
