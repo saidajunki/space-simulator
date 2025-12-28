@@ -60,14 +60,17 @@ export class RandomGenerator {
   random(): number {
     const value = this.next();
     // 53ビットの精度でdoubleに変換
-    return Number(value >> 11n) / (1 << 53);
+    const shifted = value >> 11n;
+    const divisor = 2 ** 53;
+    return Number(shifted) / divisor;
   }
 
   /**
    * min以上max以下の整数乱数を生成
    */
   randomInt(min: number, max: number): number {
-    return Math.floor(this.random() * (max - min + 1)) + min;
+    const range = max - min + 1;
+    return Math.floor(this.random() * range) + min;
   }
 
   /**

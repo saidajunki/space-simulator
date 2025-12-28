@@ -123,7 +123,7 @@ TypeScript（Node.js）
     - **Property 17: Same-Node Interaction**
     - **Validates: Requirements 10.1**
 
-- [-] 12. 複製と継承の実装
+- [x] 12. 複製と継承の実装
   - [x] 12.1 ReplicationEngineの実装
     - 単独複製、協力複製、エネルギー消費、継承、変異
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6_
@@ -133,11 +133,11 @@ TypeScript（Node.js）
     - **Property 20: Child Initial State**
     - **Validates: Requirements 11.1-11.6**
 
-- [ ] 13. Checkpoint - 相互作用と複製完了
+- [x] 13. Checkpoint - 相互作用と複製完了
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 14. アーティファクトの実装
-  - [ ] 14.1 Artifactの実装
+- [x] 14. アーティファクトの実装
+  - [x] 14.1 Artifactの実装
     - 生成、配置、データ保持、劣化
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
   - [ ]* 14.2 アーティファクトのプロパティテスト
@@ -145,37 +145,37 @@ TypeScript（Node.js）
     - **Property 22: Artifact Degradation**
     - **Validates: Requirements 12.2, 12.4, 12.5**
 
-- [ ] 15. エントロピーと劣化の実装
-  - [ ] 15.1 EntropyEngineの実装
+- [x] 15. エントロピーと劣化の実装
+  - [x] 15.1 EntropyEngineの実装
     - Entity状態劣化、Artifact劣化、Edge劣化
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
   - [ ]* 15.2 エントロピーのプロパティテスト
     - **Property 12: Entropy Degradation**
     - **Validates: Requirements 6.1, 6.4, 6.5**
 
-- [ ] 16. Checkpoint - アーティファクトとエントロピー完了
+- [x] 16. Checkpoint - アーティファクトとエントロピー完了
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 17. 世界生成の実装
-  - [ ] 17.1 WorldGeneratorの実装
+- [x] 17. 世界生成の実装
+  - [x] 17.1 WorldGeneratorの実装
     - 確率分布ベースのグラフ生成
     - _Requirements: 1.1, 1.2, 1.3, 1.5_
-  - [ ] 17.2 初期Entity配置の実装
+  - [x] 17.2 初期Entity配置の実装
     - ランダム配置、初期エネルギー分布
     - _Requirements: 3.1, 8.1_
 
-- [ ] 18. シミュレーションループの実装
-  - [ ] 18.1 Universeの実装
+- [x] 18. シミュレーションループの実装
+  - [x] 18.1 Universeの実装
     - 全コンポーネントの統合
     - _Requirements: 15.1_
-  - [ ] 18.2 step()の実装
+  - [x] 18.2 step()の実装
     - 1ステップの処理フロー
     - _Requirements: 2.2_
-  - [ ] 18.3 run()の実装
+  - [x] 18.3 run()の実装
     - 複数ステップの実行
     - _Requirements: 15.1_
 
-- [ ] 19. Checkpoint - シミュレーションループ完了
+- [x] 19. Checkpoint - シミュレーションループ完了
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 20. 観測とログの実装

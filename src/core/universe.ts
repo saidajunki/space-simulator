@@ -19,6 +19,7 @@ import { WorldGenerator, WorldGenConfig } from './world-generator.js';
 import { EntityId, NodeId, ArtifactId } from './types.js';
 import { GeneIndex } from './behavior-rule.js';
 import { Action } from './action.js';
+import { SimulationEvent, SimulationStats } from './observation.js';
 
 /**
  * Universe設定
@@ -43,29 +44,6 @@ export const DEFAULT_UNIVERSE_CONFIG: UniverseConfig = {
   entropyRate: 0.001,
   noiseRate: 0.1,
 };
-
-/**
- * シミュレーションイベント
- */
-export type SimulationEvent =
-  | { type: 'entityCreated'; entityId: EntityId; nodeId: NodeId; tick: number }
-  | { type: 'entityDied'; entityId: EntityId; cause: string; tick: number }
-  | { type: 'entityMoved'; entityId: EntityId; from: NodeId; to: NodeId; tick: number }
-  | { type: 'interaction'; initiator: EntityId; target: EntityId; tick: number }
-  | { type: 'replication'; parentId: EntityId; childId: EntityId; tick: number }
-  | { type: 'artifactCreated'; artifactId: string; nodeId: NodeId; tick: number }
-  | { type: 'artifactDecayed'; artifactId: string; tick: number };
-
-/**
- * シミュレーション統計
- */
-export interface SimulationStats {
-  tick: number;
-  entityCount: number;
-  totalEnergy: number;
-  artifactCount: number;
-  averageAge: number;
-}
 
 /**
  * Universe - シミュレーション全体
@@ -487,12 +465,30 @@ export class Universe {
     const totalEnergy = entities.reduce((sum, e) => sum + e.energy, 0);
     const totalAge = entities.reduce((sum, e) => sum + e.age, 0);
 
+    // 空間分布を計算
+    const spatialDistribution = new Map<NodeId, number>();
+    for (const entity of entities) {
+      const count = spatialDistribution.get(entity.nodeId) ?? 0;
+      spatialDistribution.set(entity.nodeId, count + 1);
+    }
+
+    // イベントカウント
+    const tick = this.time.getTick();
+    const recentEvents = this.eventLog.filter(e => e.tick === tick);
+    const interactionCount = recentEvents.filter(e => e.type === 'interaction').length;
+    const replicationCount = recentEvents.filter(e => e.type === 'replication').length;
+    const deathCount = recentEvents.filter(e => e.type === 'entityDied').length;
+
     return {
-      tick: this.time.getTick(),
+      tick,
       entityCount: entities.length,
       totalEnergy,
       artifactCount: this.artifactManager.count,
       averageAge: entities.length > 0 ? totalAge / entities.length : 0,
+      spatialDistribution,
+      interactionCount,
+      replicationCount,
+      deathCount,
     };
   }
 

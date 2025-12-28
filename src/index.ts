@@ -22,3 +22,6 @@ export * from './core/artifact.js';
 export * from './core/entropy.js';
 export * from './core/world-generator.js';
 export * from './core/universe.js';
+export * from './core/observation.js';
+export * from './core/snapshot.js';
+export * from './core/runner.js';
