@@ -10,6 +10,7 @@ import { Entity, createEntity, CreateEntityParams } from './entity.js';
 import { RandomGenerator } from './random.js';
 import { BehaviorRule } from './behavior-rule.js';
 import { TerrainType, ResourceType, NodeId, createNodeId, createEdgeId } from './types.js';
+import { TypeRegistry } from './type-registry.js';
 
 /**
  * 世界生成設定
@@ -39,6 +40,9 @@ export interface WorldGenConfig {
   /** エッジ危険度分布 */
   edgeDangerMean: number;
   edgeDangerStdDev: number;
+  // 公理19-21: 物質の多様性
+  /** 最大タイプ数 */
+  maxTypes: number;
 }
 
 /**
@@ -60,6 +64,7 @@ export const DEFAULT_WORLD_GEN_CONFIG: WorldGenConfig = {
   edgeDistanceStdDev: 5,
   edgeDangerMean: 0.1,
   edgeDangerStdDev: 0.05,
+  maxTypes: 10,
 };
 
 /**
@@ -68,6 +73,7 @@ export const DEFAULT_WORLD_GEN_CONFIG: WorldGenConfig = {
 export interface WorldGenResult {
   space: Space;
   entities: Entity[];
+  typeRegistry: TypeRegistry;
 }
 
 /**
@@ -86,6 +92,9 @@ export class WorldGenerator {
   generate(rng: RandomGenerator): WorldGenResult {
     const space = new Space();
 
+    // TypeRegistry生成（公理19-21）
+    const typeRegistry = new TypeRegistry(this.config.maxTypes, rng);
+
     // ノード生成
     const nodes = this.generateNodes(rng);
     for (const node of nodes) {
@@ -96,9 +105,9 @@ export class WorldGenerator {
     this.generateEdges(space, nodes, rng);
 
     // Entity生成
-    const entities = this.generateEntities(nodes, rng);
+    const entities = this.generateEntities(nodes, rng, typeRegistry);
 
-    return { space, entities };
+    return { space, entities, typeRegistry };
   }
 
   /**
@@ -233,7 +242,7 @@ export class WorldGenerator {
   /**
    * Entity生成
    */
-  private generateEntities(nodes: Node[], rng: RandomGenerator): Entity[] {
+  private generateEntities(nodes: Node[], rng: RandomGenerator, typeRegistry: TypeRegistry): Entity[] {
     const entities: Entity[] = [];
 
     for (let i = 0; i < this.config.initialEntityCount; i++) {
@@ -244,12 +253,19 @@ export class WorldGenerator {
         rng.randomNormal(this.config.initialEnergyMean, this.config.initialEnergyStdDev)
       );
 
+      // タイプをランダムに割り当て（公理19）
+      const type = rng.randomInt(0, this.config.maxTypes - 1);
+      const typeProps = typeRegistry.getTypeProperties(type);
+
       const params: CreateEntityParams = {
         nodeId: node.id,
         energy,
         stateCapacity: 256,
         behaviorRule: BehaviorRule.random(rng),
         perceptionRange: 1,
+        type,
+        mass: typeProps.baseMass,
+        composition: [type],
       };
 
       const entity = createEntity(params, rng);

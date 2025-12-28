@@ -24,6 +24,8 @@ interface CLIOptions {
   output?: string;
   background?: boolean;
   runId?: string;
+  // 公理19-21: 物質の多様性
+  maxTypes?: number;
 }
 
 /**
@@ -67,6 +69,8 @@ function parseArgs(args: string[]): CLIOptions {
       options.background = true;
     } else if (arg === '--run-id') {
       options.runId = args[++i] ?? '';
+    } else if (arg === '--max-types') {
+      options.maxTypes = parseInt(args[++i] || '10', 10);
     }
   }
 
@@ -92,6 +96,7 @@ Options:
   --max-ticks, -t <number>   Maximum ticks to run (default: 1000)
   --nodes, -n <number>       Number of nodes (default: 100)
   --entities, -e <number>    Initial entity count (default: 50)
+  --max-types <number>       Maximum material types (default: 10)
   --log-freq <number>        Log frequency in ticks (default: 100)
   --snapshot-freq <number>   Snapshot frequency in ticks (default: 1000)
   --parallel, -p <number>    Parallel runs for batch (default: 1)
@@ -174,6 +179,7 @@ function runSingle(options: CLIOptions): void {
       worldGen: {
         nodeCount: options.nodeCount || 100,
         initialEntityCount: options.entityCount || 50,
+        maxTypes: options.maxTypes || 10,
       },
     },
     seed: options.seed || 12345,
@@ -441,6 +447,7 @@ async function runBatch(options: CLIOptions): Promise<void> {
         worldGen: {
           nodeCount: options.nodeCount || 100,
           initialEntityCount: options.entityCount || 50,
+          maxTypes: options.maxTypes || 10,
         },
       },
       maxTicks: options.maxTicks || 1000,

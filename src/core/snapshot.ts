@@ -58,6 +58,10 @@ export interface EntityState {
   behaviorRuleGenes: number[];
   age: number;
   perceptionRange: number;
+  // 公理19-21: 物質の多様性
+  type: number;
+  mass: number;
+  composition: number[];
 }
 
 /**
@@ -87,6 +91,10 @@ export interface UniverseState {
     entropyRate: number;
     noiseRate: number;
   };
+  // 公理19-21: 物質の多様性
+  typeDistribution?: Map<number, number> | [number, number][];
+  totalMass?: number;
+  reactionCount?: number;
 }
 
 /**

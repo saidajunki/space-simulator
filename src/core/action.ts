@@ -4,6 +4,8 @@
  */
 
 import { NodeId, EntityId, ArtifactId } from './types.js';
+import { Entity } from './entity.js';
+import { calculateMovementCost } from './transit.js';
 
 /**
  * 移動行動
@@ -142,15 +144,20 @@ export const DEFAULT_ACTION_COSTS: ActionCosts = {
 
 /**
  * 行動のコストを計算
+ * 公理20: 移動コストは質量に比例
  */
 export function calculateActionCost(
   action: Action,
   costs: ActionCosts,
-  distance: number = 1
+  distance: number = 1,
+  entity?: Entity
 ): number {
   switch (action.type) {
-    case 'move':
-      return costs.moveBase + costs.moveDistanceFactor * distance;
+    case 'move': {
+      const baseCost = costs.moveBase + costs.moveDistanceFactor * distance;
+      // 質量ベースの移動コスト（公理20）
+      return entity ? calculateMovementCost(entity, baseCost) : baseCost;
+    }
     case 'interact':
       return costs.interact;
     case 'transform':

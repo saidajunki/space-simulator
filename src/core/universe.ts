@@ -6,8 +6,8 @@
 import { Space } from './space.js';
 import { TimeManager } from './time.js';
 import { RandomGenerator } from './random.js';
-import { Entity } from './entity.js';
-import { Artifact, ArtifactManager } from './artifact.js';
+import { Entity, createEntity } from './entity.js';
+import { ArtifactManager } from './artifact.js';
 import { EntropyEngine } from './entropy.js';
 import { TransitSystem } from './transit.js';
 import { EnergySystem } from './energy.js';
@@ -19,6 +19,8 @@ import { EntityId, NodeId, ArtifactId, ResourceType } from './types.js';
 import { GeneIndex } from './behavior-rule.js';
 import { Action } from './action.js';
 import { SimulationEvent, SimulationStats } from './observation.js';
+import { TypeRegistry } from './type-registry.js';
+import { ReactionEngine, ReactionEvent } from './reaction.js';
 
 /**
  * Universe設定
@@ -64,6 +66,11 @@ export class Universe {
   private interactionEngine: InteractionEngine;
   private replicationEngine: ReplicationEngine;
   
+  // 公理19-21: 物質の多様性
+  private typeRegistry: TypeRegistry;
+  private reactionEngine: ReactionEngine;
+  private reactionLog: ReactionEvent[] = [];
+  
   private eventLog: SimulationEvent[] = [];
   private isPaused: boolean = false;
 
@@ -76,8 +83,10 @@ export class Universe {
     
     // 世界生成
     const worldGen = new WorldGenerator(this.config.worldGen);
-    const { space, entities } = worldGen.generate(this.rng);
+    const { space, entities, typeRegistry } = worldGen.generate(this.rng);
     this.space = space;
+    this.typeRegistry = typeRegistry;
+    this.reactionEngine = new ReactionEngine(typeRegistry);
     
     // Entity登録
     for (const entity of entities) {
@@ -400,6 +409,16 @@ export class Universe {
     const target = this.entities.get(targetId);
     if (!target || target.nodeId !== entity.nodeId) return;
 
+    // 公理21: 化学反応チェック
+    const reactionCheck = this.reactionEngine.checkReaction(entity, target, this.rng);
+    
+    if (reactionCheck.willReact && reactionCheck.result) {
+      // 化学反応を実行
+      this.executeReaction(entity, target, reactionCheck.result, tick);
+      return;
+    }
+
+    // 通常の相互作用
     const result = this.interactionEngine.process(entity, target, null, this.rng);
     
     if (result.success) {
@@ -410,6 +429,65 @@ export class Universe {
         type: 'interaction',
         initiator: entity.id,
         target: targetId,
+        tick,
+      });
+    }
+  }
+
+  /**
+   * 化学反応実行（公理21）
+   */
+  private executeReaction(
+    entity1: Entity,
+    entity2: Entity,
+    result: import('./type-registry.js').ReactionResult,
+    tick: number
+  ): void {
+    // 反応イベントをログ
+    const reactionEvent = this.reactionEngine.createReactionEvent(
+      tick,
+      entity1.nodeId,
+      entity1,
+      entity2,
+      result
+    );
+    this.reactionLog.push(reactionEvent);
+
+    // 反応を実行
+    const { productsInfo } = this.reactionEngine.executeReaction(entity1, entity2, result);
+
+    // 反応物を削除
+    this.entities.delete(entity1.id);
+    this.entities.delete(entity2.id);
+    
+    this.logEvent({
+      type: 'entityDied',
+      entityId: entity1.id,
+      cause: 'reaction',
+      tick,
+    });
+    this.logEvent({
+      type: 'entityDied',
+      entityId: entity2.id,
+      cause: 'reaction',
+      tick,
+    });
+
+    // 生成物を作成
+    for (const productInfo of productsInfo) {
+      const newEntity = createEntity({
+        nodeId: entity1.nodeId,
+        energy: productInfo.energy,
+        type: productInfo.type,
+        mass: productInfo.mass,
+        composition: [productInfo.type],
+      }, this.rng);
+      
+      this.entities.set(newEntity.id, newEntity);
+      this.logEvent({
+        type: 'entityCreated',
+        entityId: newEntity.id,
+        nodeId: newEntity.nodeId,
         tick,
       });
     }
@@ -534,12 +612,23 @@ export class Universe {
       spatialDistribution.set(entity.nodeId, count + 1);
     }
 
+    // タイプ分布を計算（公理19）
+    const typeDistribution = new Map<number, number>();
+    let totalMass = 0;
+    for (const entity of entities) {
+      const type = entity.type ?? 0;
+      const count = typeDistribution.get(type) ?? 0;
+      typeDistribution.set(type, count + 1);
+      totalMass += entity.mass ?? 1;
+    }
+
     // イベントカウント
     const tick = this.time.getTick();
     const recentEvents = this.eventLog.filter(e => e.tick === tick);
     const interactionCount = recentEvents.filter(e => e.type === 'interaction').length;
     const replicationCount = recentEvents.filter(e => e.type === 'replication').length;
     const deathCount = recentEvents.filter(e => e.type === 'entityDied').length;
+    const reactionCount = this.reactionLog.filter(e => e.tick === tick).length;
 
     return {
       tick,
@@ -551,6 +640,9 @@ export class Universe {
       interactionCount,
       replicationCount,
       deathCount,
+      typeDistribution,
+      totalMass,
+      reactionCount,
     };
   }
 

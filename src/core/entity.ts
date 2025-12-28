@@ -26,6 +26,14 @@ export interface Entity {
   age: number;
   /** 知覚範囲（ホップ数） */
   perceptionRange: number;
+  
+  // 公理19-21: 物質の多様性
+  /** タイプID（元素番号に相当、名前は付けない） */
+  type: number;
+  /** 質量（移動コストに影響） */
+  mass: number;
+  /** 構成タイプリスト（単体なら[type]、複合体なら複数） */
+  composition: number[];
 }
 
 /**
@@ -38,6 +46,10 @@ export interface CreateEntityParams {
   stateCapacity?: number;
   behaviorRule?: BehaviorRule;
   perceptionRange?: number;
+  // 公理19-21: 物質の多様性
+  type?: number;
+  mass?: number;
+  composition?: number[];
 }
 
 /** エンティティIDカウンター */
@@ -61,6 +73,9 @@ export function createEntity(params: CreateEntityParams, rng?: RandomGenerator):
     stateCapacity = 256,
     behaviorRule = rng ? BehaviorRule.random(rng) : new BehaviorRule(),
     perceptionRange = 1,
+    type = 0,
+    mass = 1,
+    composition,
   } = params;
 
   return {
@@ -71,6 +86,9 @@ export function createEntity(params: CreateEntityParams, rng?: RandomGenerator):
     behaviorRule,
     age: 0,
     perceptionRange,
+    type,
+    mass,
+    composition: composition ?? [type],
   };
 }
 
@@ -118,6 +136,9 @@ export function serializeEntity(entity: Entity): object {
     behaviorRule: entity.behaviorRule.serialize(),
     age: entity.age,
     perceptionRange: entity.perceptionRange,
+    type: entity.type,
+    mass: entity.mass,
+    composition: entity.composition,
   };
 }
 
@@ -132,7 +153,11 @@ export function deserializeEntity(data: {
   behaviorRule: number[];
   age: number;
   perceptionRange: number;
+  type?: number;
+  mass?: number;
+  composition?: number[];
 }): Entity {
+  const type = data.type ?? 0;
   return {
     id: createEntityId(data.id),
     nodeId: data.nodeId as NodeId,
@@ -141,5 +166,8 @@ export function deserializeEntity(data: {
     behaviorRule: BehaviorRule.deserialize(data.behaviorRule),
     age: data.age,
     perceptionRange: data.perceptionRange,
+    type,
+    mass: data.mass ?? 1,
+    composition: data.composition ?? [type],
   };
 }

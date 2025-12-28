@@ -5,7 +5,9 @@
 
 import { Entity, createEntity } from './entity.js';
 import { RandomGenerator } from './random.js';
-import { InternalState } from './internal-state.js';
+
+/** タイプ変異率（公理19） */
+const TYPE_MUTATION_RATE = 0.01;
 
 /**
  * 複製設定
@@ -21,6 +23,8 @@ export interface ReplicationConfig {
   childStateCapacity: number;
   /** 協力複製のボーナス */
   cooperativeBonus: number;
+  /** 最大タイプ数（タイプ変異用） */
+  maxTypes: number;
 }
 
 /**
@@ -32,6 +36,7 @@ export const DEFAULT_REPLICATION_CONFIG: ReplicationConfig = {
   energyTransferRate: 0.4,
   childStateCapacity: 256,
   cooperativeBonus: 1.2,
+  maxTypes: 10,
 };
 
 /**
@@ -46,6 +51,25 @@ export interface ReplicationResult {
   energyConsumed: number;
   /** 失敗理由 */
   failureReason?: string;
+  /** タイプ変異が発生したか（公理19） */
+  typeMutated?: boolean;
+}
+
+/**
+ * タイプを継承（変異あり）
+ * 公理19: 複製時にタイプが継承され、小確率で変異
+ */
+function inheritType(parentType: number, rng: RandomGenerator, maxTypes: number): { type: number; mutated: boolean } {
+  if (rng.random() < TYPE_MUTATION_RATE) {
+    return {
+      type: rng.randomInt(0, maxTypes - 1),
+      mutated: true,
+    };
+  }
+  return {
+    type: parentType,
+    mutated: false,
+  };
 }
 
 /**
@@ -82,6 +106,13 @@ export class ReplicationEngine {
     // 行動ルールの継承と変異
     const childBehaviorRule = parent.behaviorRule.inherit(rng, this.config.mutationRate);
 
+    // タイプの継承と変異（公理19）
+    const { type: childType, mutated: typeMutated } = inheritType(
+      parent.type ?? 0,
+      rng,
+      this.config.maxTypes
+    );
+
     // 子エンティティ生成
     const child = createEntity({
       nodeId: parent.nodeId,
@@ -89,12 +120,16 @@ export class ReplicationEngine {
       stateCapacity: this.config.childStateCapacity,
       behaviorRule: childBehaviorRule,
       perceptionRange: parent.perceptionRange,
+      type: childType,
+      mass: parent.mass ?? 1,
+      composition: [childType],
     }, rng);
 
     return {
       success: true,
       child,
       energyConsumed: this.config.energyCost + childEnergy,
+      typeMutated,
     };
   }
 
@@ -147,6 +182,17 @@ export class ReplicationEngine {
       this.config.mutationRate
     );
 
+    // タイプの継承（どちらかの親から、変異あり）（公理19）
+    const parentType = rng.random() < 0.5 ? (parent1.type ?? 0) : (parent2.type ?? 0);
+    const { type: childType, mutated: typeMutated } = inheritType(
+      parentType,
+      rng,
+      this.config.maxTypes
+    );
+
+    // 質量は両親の平均
+    const childMass = Math.ceil(((parent1.mass ?? 1) + (parent2.mass ?? 1)) / 2);
+
     // 子エンティティ生成
     const child = createEntity({
       nodeId: parent1.nodeId,
@@ -154,12 +200,16 @@ export class ReplicationEngine {
       stateCapacity: this.config.childStateCapacity,
       behaviorRule: childBehaviorRule,
       perceptionRange: Math.max(parent1.perceptionRange, parent2.perceptionRange),
+      type: childType,
+      mass: childMass,
+      composition: [childType],
     }, rng);
 
     return {
       success: true,
       child,
       energyConsumed: this.config.energyCost + childEnergy,
+      typeMutated,
     };
   }
 

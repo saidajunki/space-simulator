@@ -4,10 +4,13 @@
  */
 
 import { EntityId, NodeId, ResourceType } from './types.js';
-import { Entity, consumeEnergy, addEnergy, isAlive } from './entity.js';
+import { Entity } from './entity.js';
 import { Node } from './node.js';
 import { Space } from './space.js';
 import { Action, ActionCosts, DEFAULT_ACTION_COSTS, calculateActionCost } from './action.js';
+
+/** エネルギー・質量変換レート（公理20: E=mc²的概念） */
+export const ENERGY_MASS_CONVERSION_RATE = 10;
 
 /**
  * エネルギーシステム設定
@@ -19,6 +22,8 @@ export interface EnergyConfig {
   resourceToEnergyRate: number;
   /** 最大エネルギー */
   maxEnergy: number;
+  /** エネルギー・質量変換レート（公理20） */
+  energyMassConversionRate: number;
 }
 
 /**
@@ -28,6 +33,7 @@ export const DEFAULT_ENERGY_CONFIG: EnergyConfig = {
   actionCosts: DEFAULT_ACTION_COSTS,
   resourceToEnergyRate: 1.0,
   maxEnergy: 1000,
+  energyMassConversionRate: ENERGY_MASS_CONVERSION_RATE,
 };
 
 /**
@@ -132,13 +138,43 @@ export class EnergySystem {
 
   /**
    * エンティティが死亡した際のエネルギー処理
+   * 公理20: 質量に比例したエネルギーを放出
    */
   handleDeath(entity: Entity, node: Node): void {
     // エンティティのエネルギーを環境に戻す
     const currentEnergy = node.resources.get(ResourceType.Energy) ?? 0;
-    node.resources.set(ResourceType.Energy, currentEnergy + entity.energy);
+    
+    // 質量からのエネルギー放出（公理20: E=mc²的概念）
+    const massEnergy = (entity.mass ?? 1) * this.config.energyMassConversionRate;
+    const totalReleasedEnergy = entity.energy + massEnergy;
+    
+    node.resources.set(ResourceType.Energy, currentEnergy + totalReleasedEnergy);
     entity.energy = 0;
     // 総エネルギーは保存される
+  }
+
+  /**
+   * エンティティ生成に必要なエネルギーを計算
+   * 公理20: 質量に比例したエネルギーが必要
+   */
+  calculateCreationEnergy(mass: number): number {
+    return mass * this.config.energyMassConversionRate;
+  }
+
+  /**
+   * 質量からエネルギーを計算
+   * 公理20: E=mc²的概念
+   */
+  massToEnergy(mass: number): number {
+    return mass * this.config.energyMassConversionRate;
+  }
+
+  /**
+   * エネルギーから質量を計算
+   * 公理20: E=mc²的概念
+   */
+  energyToMass(energy: number): number {
+    return Math.floor(energy / this.config.energyMassConversionRate);
   }
 
   /**

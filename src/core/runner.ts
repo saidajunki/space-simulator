@@ -302,6 +302,9 @@ export class LocalRunner {
       behaviorRuleGenes: entity.behaviorRule.serialize(),
       age: entity.age,
       perceptionRange: entity.perceptionRange,
+      type: entity.type ?? 0,
+      mass: entity.mass ?? 1,
+      composition: entity.composition ?? [entity.type ?? 0],
     };
   }
 }

@@ -3,7 +3,7 @@
  * Requirements: 2.4, 14.1, 14.2, 14.3
  */
 
-import { EntityId, NodeId, ArtifactId } from './types.js';
+import { EntityId, NodeId } from './types.js';
 
 /**
  * シミュレーションイベント
@@ -18,7 +18,9 @@ export type SimulationEvent =
   | { type: 'artifactDecayed'; artifactId: string; tick: number }
   | { type: 'harvest'; entityId: EntityId; nodeId: NodeId; amount: number; tick: number }
   | { type: 'disaster'; nodeId: NodeId; disasterType: string; tick: number }
-  | { type: 'guardrailIntervention'; intervention: string; tick: number };
+  | { type: 'guardrailIntervention'; intervention: string; tick: number }
+  // 公理21: 化学反応イベント
+  | { type: 'reaction'; nodeId: NodeId; reactantTypes: number[]; productTypes: number[]; energyDelta: number; tick: number };
 
 /**
  * シミュレーション統計
@@ -33,6 +35,10 @@ export interface SimulationStats {
   interactionCount: number;
   replicationCount: number;
   deathCount: number;
+  // 公理19-21: 物質の多様性
+  typeDistribution?: Map<number, number>;
+  totalMass?: number;
+  reactionCount?: number;
 }
 
 /**

@@ -6,6 +6,23 @@
 import { NodeId, EntityId, TransitItemType } from './types.js';
 import { Edge, TransitItem } from './edge.js';
 import { Space } from './space.js';
+import { Entity } from './entity.js';
+
+/** 基本質量単位（移動コスト計算用） */
+export const BASE_MASS_UNIT = 5;
+
+/**
+ * 質量ベースの移動コストを計算
+ * 公理20: 質量が大きいほど移動コストが高い
+ * 
+ * @param entity エンティティ
+ * @param baseCost 基本移動コスト
+ * @returns 質量を考慮した移動コスト
+ */
+export function calculateMovementCost(entity: Entity, baseCost: number): number {
+  const massFactor = 1 + (entity.mass ?? 1) / BASE_MASS_UNIT;
+  return Math.ceil(baseCost * massFactor);
+}
 
 /**
  * 輸送システム
