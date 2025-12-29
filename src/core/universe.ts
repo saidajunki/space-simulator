@@ -112,7 +112,9 @@ export class Universe {
     this.transitSystem = new TransitSystem();
     this.energySystem = new EnergySystem();
     this.interactionEngine = new InteractionEngine();
-    this.replicationEngine = new ReplicationEngine();
+    // maxTypesをReplicationEngineに渡す（タイプ変異の範囲制限）
+    const maxTypes = this.config.worldGen.maxTypes ?? 10;
+    this.replicationEngine = new ReplicationEngine({ maxTypes });
   }
 
   /**
