@@ -132,15 +132,20 @@ export class EntropyEngine {
    * 維持コストの適用
    * エネルギー保存則: 維持コストは廃熱として環境に散逸する
    * 公理19: タイプのstabilityが高いほど維持コストが低い
+   * アーティファクトによるシェルター効果: 維持コストを低減
    */
-  applyMaintenanceCost(entity: Entity, node: Node | undefined, stability?: number): number {
+  applyMaintenanceCost(entity: Entity, node: Node | undefined, stability?: number, shelterEffect?: number): number {
     // stability: 0.0-1.0、高いほど安定（維持コスト低）
     // stabilityが1.0なら維持コストは半分、0.0なら2倍
     const stabilityFactor = stability !== undefined 
       ? 2.0 - stability  // stability=1.0 → 1.0倍, stability=0.0 → 2.0倍
       : 1.0;
     
-    const cost = this.config.maintenanceCost * stabilityFactor;
+    // シェルター効果: 0.0-0.5、アーティファクトのdurabilityに比例
+    // shelterEffect=0.5なら維持コストは50%減
+    const shelterFactor = 1.0 - (shelterEffect ?? 0);
+    
+    const cost = this.config.maintenanceCost * stabilityFactor * shelterFactor;
     entity.energy -= cost;
     
     // エネルギー保存則: 維持コストは廃熱として散逸
@@ -154,6 +159,7 @@ export class EntropyEngine {
   /**
    * 全体へのエントロピー適用
    * @param entityStabilityMap エンティティIDからstability値へのマップ（公理19）
+   * @param entityShelterMap エンティティIDからシェルター効果値へのマップ
    */
   applyEntropy(
     entities: Entity[],
@@ -162,7 +168,8 @@ export class EntropyEngine {
     nodeResources: Map<NodeId, Map<ResourceType, number>>,
     entityNodeMap: Map<EntityId, Node>,
     rng: RandomGenerator,
-    entityStabilityMap?: Map<EntityId, number>
+    entityStabilityMap?: Map<EntityId, number>,
+    entityShelterMap?: Map<EntityId, number>
   ): EntropyResult {
     const result: EntropyResult = {
       degradedEntities: [],
@@ -179,9 +186,11 @@ export class EntropyEngine {
       }
       // エネルギー保存則: 維持コストは環境に散逸
       // 公理19: タイプのstabilityを反映
+      // シェルター効果: アーティファクトによる維持コスト低減
       const node = entityNodeMap.get(entity.id);
       const stability = entityStabilityMap?.get(entity.id);
-      result.totalEnergyLoss += this.applyMaintenanceCost(entity, node, stability);
+      const shelter = entityShelterMap?.get(entity.id);
+      result.totalEnergyLoss += this.applyMaintenanceCost(entity, node, stability, shelter);
     }
 
     // Artifact劣化

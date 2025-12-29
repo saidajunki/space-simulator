@@ -42,6 +42,7 @@ export interface LandscapeInfo {
   totalPrestige: number;
   beaconStrength: number;
   harvestBonus: number;
+  shelterEffect: number;
   wasteHeat: number;
 }
 
@@ -286,14 +287,24 @@ export class Universe {
       nodeResources.set(node.id, node.resources);
     }
 
+    // ノードごとのシェルター効果を事前計算
+    const nodeShelterMap = new Map<NodeId, number>();
+    for (const node of this.space.getAllNodes()) {
+      nodeShelterMap.set(node.id, this.calculateShelterEffect(node.id));
+    }
+
     // エンティティとノードのマッピングを作成（維持コストの散逸先）
     const entityNodeMap = new Map<EntityId, Node>();
     // 公理19: エンティティのstabilityマップを作成
     const entityStabilityMap = new Map<EntityId, number>();
+    // シェルター効果マップを作成
+    const entityShelterMap = new Map<EntityId, number>();
     for (const entity of entities) {
       const node = this.space.getNode(entity.nodeId);
       if (node) {
         entityNodeMap.set(entity.id, node);
+        // ノードのシェルター効果をエンティティに適用
+        entityShelterMap.set(entity.id, nodeShelterMap.get(node.id) ?? 0);
       }
       // タイプのstabilityを取得
       const entityType = entity.type ?? 0;
@@ -308,7 +319,8 @@ export class Universe {
       nodeResources,
       entityNodeMap,
       this.rng,
-      entityStabilityMap
+      entityStabilityMap,
+      entityShelterMap
     );
 
     // 消滅したArtifactを削除
@@ -968,6 +980,25 @@ export class Universe {
   }
 
   /**
+   * アーティファクトによるシェルター効果を計算
+   * durabilityに比例（断熱効果＝維持コスト低減）
+   */
+  private calculateShelterEffect(nodeId: NodeId): number {
+    const artifacts = this.artifactManager.getByNode(nodeId);
+    if (artifacts.length === 0) return 0;
+    
+    // 各アーティファクトのdurabilityの合計 × 係数
+    const SHELTER_EFFECT_RATE = 0.05; // durability 1.0あたり5%維持コスト低減
+    let totalEffect = 0;
+    for (const artifact of artifacts) {
+      totalEffect += artifact.durability * SHELTER_EFFECT_RATE;
+    }
+    
+    // 最大30%低減に制限
+    return Math.min(0.3, totalEffect);
+  }
+
+  /**
    * 重み付き選択（重みが全て0の場合はランダム）
    */
   private pickWeighted<T>(items: T[], weights: number[]): T | null {
@@ -1159,13 +1190,13 @@ export class Universe {
    */
   getLandscape(): LandscapeInfo[] {
     const nodes = this.space.getAllNodes();
-    const tick = this.time.getTick();
     const result: LandscapeInfo[] = [];
 
     for (const node of nodes) {
       const artifacts = this.artifactManager.getByNode(node.id);
       const entities = Array.from(this.entities.values()).filter(e => e.nodeId === node.id);
       const harvestBonus = this.calculateArtifactHarvestBonus(node.id);
+      const shelterEffect = this.calculateShelterEffect(node.id);
       
       // Beacon強度計算
       let beaconStrength = 0;
@@ -1185,6 +1216,7 @@ export class Universe {
         totalPrestige,
         beaconStrength,
         harvestBonus,
+        shelterEffect,
         wasteHeat: node.wasteHeat ?? 0,
       });
     }

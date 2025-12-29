@@ -366,12 +366,15 @@ function runSingle(options: CLIOptions): void {
         }).slice(0, 10);
         
         for (const land of sorted) {
-          const bonus = land.harvestBonus > 0 ? ` +${(land.harvestBonus * 100).toFixed(0)}%` : '';
+          const harvestStr = land.harvestBonus > 0 ? `H+${(land.harvestBonus * 100).toFixed(0)}%` : '';
+          const shelterStr = land.shelterEffect > 0 ? `S-${(land.shelterEffect * 100).toFixed(0)}%` : '';
+          const bonuses = [harvestStr, shelterStr].filter(s => s).join(' ');
           console.log(
             `  ${land.nodeId}: ` +
             `E=${land.entityCount} A=${land.artifactCount} ` +
             `R=${land.resources.toFixed(0)} P=${land.totalPrestige.toFixed(0)} ` +
-            `B=${land.beaconStrength.toFixed(1)}${bonus}`
+            `B=${land.beaconStrength.toFixed(1)}` +
+            (bonuses ? ` [${bonuses}]` : '')
           );
         }
       }
