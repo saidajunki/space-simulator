@@ -5,6 +5,7 @@
  */
 
 import { LocalRunner, BatchRunner, RunInput, RunOutput } from './core/runner.js';
+import { RegimeExplorer, ExplorationConfig, DEFAULT_EXPLORATION_CONFIG } from './core/regime-explorer.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -12,7 +13,7 @@ import * as path from 'path';
  * CLIオプション
  */
 interface CLIOptions {
-  command: 'run' | 'batch' | 'status' | 'help';
+  command: 'run' | 'batch' | 'status' | 'explore-regimes' | 'help';
   seed?: number;
   seeds?: string;
   maxTicks?: number;
@@ -28,6 +29,9 @@ interface CLIOptions {
   maxTypes?: number;
   // 道具効果ON/OFF
   toolEffect?: boolean;
+  // レジーム探索用
+  regenRates?: string;
+  toolEffectAB?: boolean;
 }
 
 /**
@@ -47,6 +51,8 @@ function parseArgs(args: string[]): CLIOptions {
       options.command = 'batch';
     } else if (arg === 'status') {
       options.command = 'status';
+    } else if (arg === 'explore-regimes') {
+      options.command = 'explore-regimes';
     } else if (arg === 'help' || arg === '--help' || arg === '-h') {
       options.command = 'help';
     } else if (arg === '--seed' || arg === '-s') {
@@ -76,6 +82,10 @@ function parseArgs(args: string[]): CLIOptions {
     } else if (arg === '--tool-effect') {
       const val = args[++i] ?? 'on';
       options.toolEffect = val.toLowerCase() === 'on' || val === 'true' || val === '1';
+    } else if (arg === '--regen-rates') {
+      options.regenRates = args[++i] ?? '';
+    } else if (arg === '--tool-effect-ab') {
+      options.toolEffectAB = true;
     }
   }
 
@@ -90,14 +100,15 @@ function showHelp(): void {
 Universe Simulation CLI
 
 Usage:
-  universe-sim run [options]     Run a single simulation
-  universe-sim batch [options]   Run multiple simulations with different seeds
-  universe-sim status [options]  Check status of a background run
-  universe-sim help              Show this help message
+  universe-sim run [options]           Run a single simulation
+  universe-sim batch [options]         Run multiple simulations with different seeds
+  universe-sim explore-regimes [opts]  Explore parameter space and classify regimes
+  universe-sim status [options]        Check status of a background run
+  universe-sim help                    Show this help message
 
 Options:
   --seed, -s <number>        Random seed (default: 12345)
-  --seeds <range>            Seed range for batch (e.g., "1-100")
+  --seeds <range>            Seed range for batch/explore (e.g., "1-5" or "1,2,3")
   --max-ticks, -t <number>   Maximum ticks to run (default: 1000)
   --nodes, -n <number>       Number of nodes (default: 100)
   --entities, -e <number>    Initial entity count (default: 50)
@@ -110,11 +121,16 @@ Options:
   --background, -b           Run in background mode (output to files)
   --run-id <id>              Run ID for status check
 
+Explore-regimes Options:
+  --regen-rates <list>       Comma-separated regen rates (default: 0.004,0.008,0.016,0.032,0.064)
+  --tool-effect-ab           Run A/B comparison with tool effect ON/OFF
+
 Examples:
   universe-sim run --seed 42 --max-ticks 10000
   universe-sim run --seed 42 --max-ticks 100000 --background
   universe-sim status --run-id run-42-xxx
   universe-sim batch --seeds 1-10 --parallel 4
+  universe-sim explore-regimes --seeds 1-3 --tool-effect-ab
 `);
 }
 
@@ -548,6 +564,91 @@ async function runBatch(options: CLIOptions): Promise<void> {
 }
 
 /**
+ * レジーム探索実行
+ */
+function runExploreRegimes(options: CLIOptions): void {
+  // seedsをパース
+  let seeds: number[] = [1, 2, 3];
+  if (options.seeds) {
+    const match = options.seeds.match(/^(\d+)-(\d+)$/);
+    if (match) {
+      const start = parseInt(match[1]!, 10);
+      const end = parseInt(match[2]!, 10);
+      seeds = [];
+      for (let i = start; i <= end; i++) {
+        seeds.push(i);
+      }
+    } else {
+      seeds = options.seeds.split(',').map(s => parseInt(s.trim(), 10));
+    }
+  }
+
+  // regenRatesをパース
+  let regenRates = DEFAULT_EXPLORATION_CONFIG.regenRates;
+  if (options.regenRates) {
+    regenRates = options.regenRates.split(',').map(s => parseFloat(s.trim()));
+  }
+
+  const config: Partial<ExplorationConfig> = {
+    regenRates,
+    seeds,
+    maxTicks: options.maxTicks ?? 1000,
+    nodeCount: options.nodeCount ?? 30,
+    entityCount: options.entityCount ?? 50,
+    toolEffectAB: options.toolEffectAB ?? true,
+  };
+
+  console.log('Starting regime exploration...');
+  console.log(`  regenRates: ${config.regenRates?.join(', ')}`);
+  console.log(`  seeds: ${config.seeds?.join(', ')}`);
+  console.log(`  maxTicks: ${config.maxTicks}`);
+  console.log(`  toolEffectAB: ${config.toolEffectAB}`);
+  console.log('');
+
+  const explorer = new RegimeExplorer(config);
+  const startTime = Date.now();
+
+  const summary = explorer.explore((current, total, result) => {
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(
+      `[${elapsed}s] ${current}/${total}: ` +
+      `regen=${result.regenRate} seed=${result.seed} tool=${result.toolEffectEnabled ? 'ON' : 'OFF'} ` +
+      `→ ${result.regime} (E=${result.entityCount}, A=${result.artifactCount})`
+    );
+  });
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+
+  console.log('');
+  console.log('=== Exploration Complete ===');
+  console.log(`  Total runs: ${summary.results.length}`);
+  console.log(`  Duration: ${elapsed}s`);
+  console.log('');
+
+  console.log('=== Regime Distribution ===');
+  for (const [regime, count] of Object.entries(summary.regimeCounts)) {
+    const percent = ((count / summary.results.length) * 100).toFixed(1);
+    console.log(`  ${regime}: ${count} (${percent}%)`);
+  }
+
+  // 結果を保存
+  const outputDir = options.output ?? './runs';
+  const filepath = explorer.saveResults(summary, outputDir);
+  console.log('');
+  console.log(`Results saved to: ${filepath}`);
+
+  // マークダウンレポートを生成
+  const report = explorer.generateReport(summary);
+  const reportDir = '.kiro/reports';
+  if (!fs.existsSync(reportDir)) {
+    fs.mkdirSync(reportDir, { recursive: true });
+  }
+  const reportPath = path.join(reportDir, `2024-12-29-regime-exploration.md`);
+  fs.writeFileSync(reportPath, report);
+  console.log(`Report saved to: ${reportPath}`);
+}
+
+/**
  * メイン
  */
 async function main(): Promise<void> {
@@ -560,6 +661,9 @@ async function main(): Promise<void> {
       break;
     case 'batch':
       await runBatch(options);
+      break;
+    case 'explore-regimes':
+      runExploreRegimes(options);
       break;
     case 'status':
       checkStatus(options);
