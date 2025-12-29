@@ -26,6 +26,8 @@ interface CLIOptions {
   runId?: string;
   // 公理19-21: 物質の多様性
   maxTypes?: number;
+  // 道具効果ON/OFF
+  toolEffect?: boolean;
 }
 
 /**
@@ -71,6 +73,9 @@ function parseArgs(args: string[]): CLIOptions {
       options.runId = args[++i] ?? '';
     } else if (arg === '--max-types') {
       options.maxTypes = parseInt(args[++i] || '10', 10);
+    } else if (arg === '--tool-effect') {
+      const val = args[++i] ?? 'on';
+      options.toolEffect = val.toLowerCase() === 'on' || val === 'true' || val === '1';
     }
   }
 
@@ -97,6 +102,7 @@ Options:
   --nodes, -n <number>       Number of nodes (default: 100)
   --entities, -e <number>    Initial entity count (default: 50)
   --max-types <number>       Maximum material types (default: 10)
+  --tool-effect <on|off>     Enable/disable artifact tool effects (default: on)
   --log-freq <number>        Log frequency in ticks (default: 100)
   --snapshot-freq <number>   Snapshot frequency in ticks (default: 1000)
   --parallel, -p <number>    Parallel runs for batch (default: 1)
@@ -181,6 +187,7 @@ function runSingle(options: CLIOptions): void {
         initialEntityCount: options.entityCount || 50,
         maxTypes: options.maxTypes || 10,
       },
+      toolEffectEnabled: options.toolEffect !== false,  // デフォルトはtrue
     },
     seed: options.seed || 12345,
     maxTicks: options.maxTicks || 1000,

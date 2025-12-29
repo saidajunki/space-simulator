@@ -62,6 +62,8 @@ export interface UniverseConfig {
   resourceRegenerationRate: number;
   /** 廃熱放散率（宇宙への放散） */
   wasteHeatRadiationRate: number;
+  /** 道具効果（採取効率・シェルター）を有効にするか */
+  toolEffectEnabled: boolean;
 }
 
 /**
@@ -74,6 +76,7 @@ export const DEFAULT_UNIVERSE_CONFIG: UniverseConfig = {
   noiseRate: 0.1,
   resourceRegenerationRate: 0.008,  // バランス調整
   wasteHeatRadiationRate: 0.3,
+  toolEffectEnabled: true,  // デフォルトはON
 };
 
 /**
@@ -972,8 +975,12 @@ export class Universe {
   /**
    * アーティファクトによる採取効率ボーナスを計算
    * durabilityに比例（道具効果）
+   * toolEffectEnabled=falseの場合は常に0を返す
    */
   private calculateArtifactHarvestBonus(nodeId: NodeId): number {
+    // 道具効果が無効の場合は0
+    if (!this.config.toolEffectEnabled) return 0;
+    
     const artifacts = this.artifactManager.getByNode(nodeId);
     if (artifacts.length === 0) return 0;
     
@@ -991,8 +998,12 @@ export class Universe {
   /**
    * アーティファクトによるシェルター効果を計算
    * durabilityに比例（断熱効果＝維持コスト低減）
+   * toolEffectEnabled=falseの場合は常に0を返す
    */
   private calculateShelterEffect(nodeId: NodeId): number {
+    // 道具効果が無効の場合は0
+    if (!this.config.toolEffectEnabled) return 0;
+    
     const artifacts = this.artifactManager.getByNode(nodeId);
     if (artifacts.length === 0) return 0;
     
