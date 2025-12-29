@@ -23,6 +23,7 @@ export interface NodeState {
   x: number;
   y: number;
   resources: number;
+  resourceCapacity: number;
   entityCount: number;
   artifactCount: number;
   beaconStrength: number;
@@ -99,11 +100,17 @@ export function useSimulation(config: SimulationConfig) {
     const nodes: NodeState[] = allNodes.map(node => {
       const pos = nodePositionsRef.current.get(node.id) ?? { x: 400, y: 300 };
       const info = landscapeMap.get(node.id);
+      // 資源容量を取得
+      let resourceCapacity = 0;
+      for (const [, cap] of node.attributes.resourceCapacity) {
+        resourceCapacity += cap;
+      }
       return {
         id: node.id,
         x: pos.x,
         y: pos.y,
         resources: info?.resources ?? 0,
+        resourceCapacity,
         entityCount: info?.entityCount ?? 0,
         artifactCount: info?.artifactCount ?? 0,
         beaconStrength: info?.beaconStrength ?? 0,
