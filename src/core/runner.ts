@@ -309,7 +309,7 @@ export class LocalRunner {
    * Entityをシリアライズ
    */
   private serializeEntity(entity: Entity): EntityState {
-    return {
+    const state: EntityState = {
       id: entity.id,
       nodeId: entity.nodeId,
       energy: entity.energy,
@@ -322,6 +322,11 @@ export class LocalRunner {
       mass: entity.mass ?? 1,
       composition: entity.composition ?? [entity.type ?? 0],
     };
+    // maintainerUntilTickはundefinedでない場合のみ設定
+    if (entity.maintainerUntilTick !== undefined) {
+      state.maintainerUntilTick = entity.maintainerUntilTick;
+    }
+    return state;
   }
 
   /**
@@ -335,6 +340,7 @@ export class LocalRunner {
       durability: artifact.durability,
       createdAt: artifact.createdAt,
       creatorId: artifact.creatorId,
+      prestige: artifact.prestige ?? 0,
     };
   }
 }

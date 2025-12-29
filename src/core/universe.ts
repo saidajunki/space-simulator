@@ -102,6 +102,15 @@ export class Universe {
   
   private eventLog: SimulationEvent[] = [];
   private isPaused: boolean = false;
+  
+  // イベントカウンタ（tick別集計の最適化）
+  private tickEventCounts: Map<number, {
+    interaction: number;
+    replication: number;
+    death: number;
+    reaction: number;
+    repair: number;
+  }> = new Map();
 
   constructor(config: Partial<UniverseConfig> = {}) {
     this.config = { ...DEFAULT_UNIVERSE_CONFIG, ...config };
@@ -1077,6 +1086,39 @@ export class Universe {
    */
   private logEvent(event: SimulationEvent): void {
     this.eventLog.push(event);
+    
+    // tick別カウンタを更新（O(1)アクセス用）
+    const tick = event.tick;
+    let counts = this.tickEventCounts.get(tick);
+    if (!counts) {
+      counts = { interaction: 0, replication: 0, death: 0, reaction: 0, repair: 0 };
+      this.tickEventCounts.set(tick, counts);
+    }
+    
+    switch (event.type) {
+      case 'interaction':
+        counts.interaction++;
+        break;
+      case 'replication':
+        counts.replication++;
+        break;
+      case 'entityDied':
+        counts.death++;
+        break;
+      case 'reaction':
+        counts.reaction++;
+        break;
+      case 'artifactRepaired':
+        counts.repair++;
+        break;
+    }
+  }
+
+  /**
+   * 指定tickのイベントカウントを取得（O(1)）
+   */
+  private getTickEventCounts(tick: number): { interaction: number; replication: number; death: number; reaction: number; repair: number } {
+    return this.tickEventCounts.get(tick) ?? { interaction: 0, replication: 0, death: 0, reaction: 0, repair: 0 };
   }
 
   /**
@@ -1103,20 +1145,20 @@ export class Universe {
       totalMass += entity.mass ?? 1;
     }
 
-    // イベントカウント
+    // イベントカウント（O(1)アクセス）
     const tick = this.time.getTick();
-    const recentEvents = this.eventLog.filter(e => e.tick === tick);
-    const interactionCount = recentEvents.filter(e => e.type === 'interaction').length;
-    const replicationCount = recentEvents.filter(e => e.type === 'replication').length;
-    const deathCount = recentEvents.filter(e => e.type === 'entityDied').length;
-    const reactionCount = this.reactionLog.filter(e => e.tick === tick).length;
+    const eventCounts = this.getTickEventCounts(tick);
+    const interactionCount = eventCounts.interaction;
+    const replicationCount = eventCounts.replication;
+    const deathCount = eventCounts.death;
+    const reactionCount = eventCounts.reaction;
 
     // エネルギー内訳
     const breakdown = this.getEnergyBreakdown();
 
     // アーティファクト関連メトリクス
     const artifacts = this.artifactManager.getAll();
-    const repairCount = this.eventLog.filter(e => e.type === 'artifactRepaired' && e.tick === tick).length;
+    const repairCount = eventCounts.repair;
     const totalPrestige = artifacts.reduce((sum, a) => sum + (a.prestige ?? 0), 0);
     const beaconStrengths = artifacts
       .filter(a => a.durability >= 0.5)

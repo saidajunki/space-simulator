@@ -63,6 +63,8 @@ export interface EntityState {
   type: number;
   mass: number;
   composition: number[];
+  // アーティファクト永続化: 維持者ステータス
+  maintainerUntilTick?: number;
 }
 
 /**
@@ -75,6 +77,8 @@ export interface ArtifactState {
   durability: number;
   createdAt: number;
   creatorId: string;
+  // アーティファクト永続化: 威信値
+  prestige: number;
 }
 
 /**
