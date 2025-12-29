@@ -5,7 +5,7 @@
 
 import { Universe, UniverseConfig } from './universe.js';
 import { Observation, SimulationStats, SimulationEvent } from './observation.js';
-import { SnapshotManager, UniverseState, EntityState, NodeState, EdgeState, ArtifactState } from './snapshot.js';
+import { UniverseState, EntityState, NodeState, EdgeState, ArtifactState } from './snapshot.js';
 import { Entity } from './entity.js';
 import { Node } from './node.js';
 import { Edge } from './edge.js';
@@ -238,6 +238,7 @@ export class LocalRunner {
     const entities = this.universe.getAllEntities();
     const nodes = this.universe.space.getAllNodes();
     const edges = this.universe.space.getAllEdges();
+    const artifacts = this.universe.getAllArtifacts();
 
     return {
       tick: this.universe.time.getTick(),
@@ -246,7 +247,7 @@ export class LocalRunner {
       nodes: nodes.map(n => this.serializeNode(n)),
       edges: edges.map(e => this.serializeEdge(e)),
       entities: entities.map(e => this.serializeEntity(e)),
-      artifacts: [], // TODO: ArtifactManagerからの取得
+      artifacts: artifacts.map(a => this.serializeArtifact(a)),
       config: {
         entropyRate: this.universe.config.entropyRate,
         noiseRate: this.universe.config.noiseRate,
@@ -267,6 +268,7 @@ export class LocalRunner {
       resources: Array.from(node.resources.entries()),
       entityIds: Array.from(node.entityIds),
       artifactIds: Array.from(node.artifactIds),
+      wasteHeat: node.wasteHeat,
     };
   }
 
@@ -312,6 +314,20 @@ export class LocalRunner {
       type: entity.type ?? 0,
       mass: entity.mass ?? 1,
       composition: entity.composition ?? [entity.type ?? 0],
+    };
+  }
+
+  /**
+   * Artifactをシリアライズ
+   */
+  private serializeArtifact(artifact: Artifact): ArtifactState {
+    return {
+      id: artifact.id,
+      nodeId: artifact.nodeId,
+      data: Array.from(artifact.data),
+      durability: artifact.durability,
+      createdAt: artifact.createdAt,
+      creatorId: artifact.creatorId,
     };
   }
 }

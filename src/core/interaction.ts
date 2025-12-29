@@ -115,8 +115,10 @@ export class InteractionEngine {
         targetEnergyChange = -transfer;
       }
       if (noiseOccurred) {
-        initiatorEnergyChange *= rng.random();
-        targetEnergyChange *= rng.random();
+        // 保存則を維持: 同一係数でスケール
+        const noiseFactor = rng.random();
+        initiatorEnergyChange *= noiseFactor;
+        targetEnergyChange *= noiseFactor;
       }
     } else if (aggScore > coopScore && aggScore > 0.5) {
       interactionType = 'competitive';

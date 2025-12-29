@@ -3,7 +3,7 @@
  * Requirements: 2.4, 14.1, 14.2, 14.3
  */
 
-import { EntityId, NodeId } from './types.js';
+import { ArtifactId, EntityId, NodeId } from './types.js';
 
 /**
  * シミュレーションイベント
@@ -16,6 +16,9 @@ export type SimulationEvent =
   | { type: 'replication'; parentId: EntityId; childId: EntityId; tick: number }
   | { type: 'artifactCreated'; artifactId: string; nodeId: NodeId; tick: number }
   | { type: 'artifactDecayed'; artifactId: string; tick: number }
+  | { type: 'artifactRepaired'; entityId: EntityId; artifactId: ArtifactId; energyConsumed: number; durabilityBefore: number; durabilityAfter: number; tick: number }
+  | { type: 'maintainerGranted'; entityId: EntityId; untilTick: number; tick: number }
+  | { type: 'partnerSelected'; entityId: EntityId; partnerId: EntityId; isMaintainer: boolean; nodePrestige: number; tick: number }
   | { type: 'harvest'; entityId: EntityId; nodeId: NodeId; amount: number; tick: number }
   | { type: 'disaster'; nodeId: NodeId; disasterType: string; tick: number }
   | { type: 'guardrailIntervention'; intervention: string; tick: number }
@@ -39,6 +42,19 @@ export interface SimulationStats {
   typeDistribution?: Map<number, number>;
   totalMass?: number;
   reactionCount?: number;
+  // エネルギー内訳
+  entityEnergy?: number;
+  freeEnergy?: number;
+  wasteHeat?: number;
+  // アーティファクト永続化メトリクス
+  repairCount?: number;
+  totalPrestige?: number;
+  avgBeaconStrength?: number;
+  maintainerCount?: number;
+  avgArtifactAge?: number;
+  maxArtifactAge?: number;
+  // 空間集中度（ジニ係数）
+  spatialGini?: number;
 }
 
 /**

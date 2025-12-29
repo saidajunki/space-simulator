@@ -340,6 +340,18 @@ function runSingle(options: CLIOptions): void {
         console.log(`  Free energy (harvestable): ${breakdown.freeEnergy.toFixed(1)}`);
         console.log(`  Waste heat (non-harvestable): ${breakdown.wasteHeat.toFixed(1)}`);
       }
+
+      // アーティファクト永続化メトリクス
+      if (finalStats.totalPrestige !== undefined) {
+        console.log('');
+        console.log('=== Artifact Persistence ===');
+        console.log(`  Total prestige: ${finalStats.totalPrestige.toFixed(1)}`);
+        console.log(`  Avg beacon strength: ${(finalStats.avgBeaconStrength ?? 0).toFixed(2)}`);
+        console.log(`  Maintainers: ${finalStats.maintainerCount ?? 0}`);
+        console.log(`  Avg artifact age: ${(finalStats.avgArtifactAge ?? 0).toFixed(1)}`);
+        console.log(`  Max artifact age: ${finalStats.maxArtifactAge ?? 0}`);
+        console.log(`  Spatial Gini: ${(finalStats.spatialGini ?? 0).toFixed(3)}`);
+      }
     }
   }
 }

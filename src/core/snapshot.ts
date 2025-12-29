@@ -17,6 +17,7 @@ export interface NodeState {
   resources: [string, number][];
   entityIds: string[];
   artifactIds: string[];
+  wasteHeat: number;
 }
 
 /**

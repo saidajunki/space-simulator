@@ -26,6 +26,8 @@ export interface Entity {
   age: number;
   /** 知覚範囲（ホップ数） */
   perceptionRange: number;
+  /** 維持者ボーナスの有効期限tick（未付与ならundefined） */
+  maintainerUntilTick: number | undefined;
   
   // 公理19-21: 物質の多様性
   /** タイプID（元素番号に相当、名前は付けない） */
@@ -46,6 +48,7 @@ export interface CreateEntityParams {
   stateCapacity?: number;
   behaviorRule?: BehaviorRule;
   perceptionRange?: number;
+  maintainerUntilTick?: number;
   // 公理19-21: 物質の多様性
   type?: number;
   mass?: number;
@@ -73,6 +76,7 @@ export function createEntity(params: CreateEntityParams, rng?: RandomGenerator):
     stateCapacity = 256,
     behaviorRule = rng ? BehaviorRule.random(rng) : new BehaviorRule(),
     perceptionRange = 1,
+    maintainerUntilTick,
     type = 0,
     mass = 1,
     composition,
@@ -86,6 +90,7 @@ export function createEntity(params: CreateEntityParams, rng?: RandomGenerator):
     behaviorRule,
     age: 0,
     perceptionRange,
+    maintainerUntilTick,
     type,
     mass,
     composition: composition ?? [type],
@@ -136,6 +141,7 @@ export function serializeEntity(entity: Entity): object {
     behaviorRule: entity.behaviorRule.serialize(),
     age: entity.age,
     perceptionRange: entity.perceptionRange,
+    maintainerUntilTick: entity.maintainerUntilTick,
     type: entity.type,
     mass: entity.mass,
     composition: entity.composition,
@@ -153,6 +159,7 @@ export function deserializeEntity(data: {
   behaviorRule: number[];
   age: number;
   perceptionRange: number;
+  maintainerUntilTick?: number;
   type?: number;
   mass?: number;
   composition?: number[];
@@ -166,6 +173,7 @@ export function deserializeEntity(data: {
     behaviorRule: BehaviorRule.deserialize(data.behaviorRule),
     age: data.age,
     perceptionRange: data.perceptionRange,
+    maintainerUntilTick: data.maintainerUntilTick,
     type,
     mass: data.mass ?? 1,
     composition: data.composition ?? [type],

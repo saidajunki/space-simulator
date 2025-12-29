@@ -18,6 +18,8 @@ export interface Artifact {
   data: Uint8Array;
   /** 耐久度（0-1、時間経過で減少） */
   durability: number;
+  /** Prestige: 維持に投下された累積エネルギー（エネルギーではなく会計値） */
+  prestige: number;
   /** 作成tick */
   createdAt: number;
   /** 作成者ID */
@@ -105,6 +107,7 @@ export class ArtifactManager {
       nodeId,
       data: new Uint8Array(data),
       durability: this.config.initialDurability,
+      prestige: this.config.energyCost, // 生成時の消費エネルギーをPrestigeに積む
       createdAt: currentTick,
       creatorId,
     };
@@ -167,12 +170,14 @@ export class ArtifactManager {
   /**
    * アーティファクトの修復（エネルギー消費）
    */
-  repair(id: ArtifactId, amount: number): boolean {
+  repair(id: ArtifactId, amount: number, prestigeGain: number = 0): { success: boolean; before: number; after: number } {
     const artifact = this.artifacts.get(id);
-    if (!artifact) return false;
+    if (!artifact) return { success: false, before: 0, after: 0 };
 
+    const before = artifact.durability;
     artifact.durability = Math.min(1.0, artifact.durability + amount);
-    return true;
+    artifact.prestige += prestigeGain;
+    return { success: true, before, after: artifact.durability };
   }
 
   /**

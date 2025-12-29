@@ -49,6 +49,14 @@ export interface CreateArtifactAction {
 }
 
 /**
+ * アーティファクト修復行動
+ */
+export interface RepairArtifactAction {
+  type: 'repairArtifact';
+  artifactId: ArtifactId;
+}
+
+/**
  * アーティファクト読み取り行動
  */
 export interface ReadArtifactAction {
@@ -80,6 +88,7 @@ export type Action =
   | TransformAction
   | ReplicateAction
   | CreateArtifactAction
+  | RepairArtifactAction
   | ReadArtifactAction
   | HarvestAction
   | IdleAction;
@@ -119,6 +128,8 @@ export interface ActionCosts {
   replicate: number;
   /** アーティファクト生成コスト */
   createArtifact: number;
+  /** アーティファクト修復コスト */
+  repairArtifact: number;
   /** アーティファクト読み取りコスト */
   readArtifact: number;
   /** 資源採取コスト */
@@ -137,6 +148,7 @@ export const DEFAULT_ACTION_COSTS: ActionCosts = {
   transform: 1,
   replicate: 50,
   createArtifact: 10,
+  repairArtifact: 8,
   readArtifact: 1,
   harvest: 0.5,
   idle: 0.5,
@@ -166,6 +178,8 @@ export function calculateActionCost(
       return costs.replicate;
     case 'createArtifact':
       return costs.createArtifact;
+    case 'repairArtifact':
+      return costs.repairArtifact;
     case 'readArtifact':
       return costs.readArtifact;
     case 'harvest':
@@ -192,6 +206,8 @@ export function actionToString(action: Action): string {
         : `replicate alone`;
     case 'createArtifact':
       return `create artifact`;
+    case 'repairArtifact':
+      return `repair artifact ${action.artifactId}`;
     case 'readArtifact':
       return `read artifact ${action.artifactId}`;
     case 'harvest':

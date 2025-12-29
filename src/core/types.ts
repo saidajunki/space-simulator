@@ -38,6 +38,7 @@ export type ActionType =
   | 'transform'
   | 'replicate'
   | 'createArtifact'
+  | 'repairArtifact'
   | 'readArtifact'
   | 'idle';
 

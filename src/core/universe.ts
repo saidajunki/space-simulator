@@ -17,12 +17,19 @@ import { ReplicationEngine } from './replication.js';
 import { WorldGenerator, WorldGenConfig } from './world-generator.js';
 import { EntityId, NodeId, ArtifactId, ResourceType } from './types.js';
 import { Node } from './node.js';
-import { GeneIndex } from './behavior-rule.js';
+import { GeneIndex, FeatureIndex, ActionIndex, BehaviorRule, FEATURE_COUNT, ACTION_COUNT } from './behavior-rule.js';
 import { Action } from './action.js';
 import { SimulationEvent, SimulationStats } from './observation.js';
 import { TypeRegistry } from './type-registry.js';
 import { ReactionEngine, ReactionEvent } from './reaction.js';
 
+const BEACON_DURABILITY_THRESHOLD = 0.5;
+const BEACON_SCALE = 1.0;
+const REPAIR_ENERGY_PER_DURABILITY = 20;
+const PARTNER_MAINTAINER_BONUS = 1.0;
+const BEACON_ATTRACTION_WEIGHT = 1.0;
+const MAINTAINER_DURATION_MIN = 10;
+const MAINTAINER_DURATION_MAX = 50;
 /**
  * Universe設定
  */
@@ -74,6 +81,8 @@ export class Universe {
   private typeRegistry: TypeRegistry;
   private reactionEngine: ReactionEngine;
   private reactionLog: ReactionEvent[] = [];
+  private nodePrestigeMap: Map<NodeId, number> = new Map();
+  private beaconStrengthMap: Map<NodeId, number> = new Map();
   
   private eventLog: SimulationEvent[] = [];
   private isPaused: boolean = false;
@@ -115,6 +124,20 @@ export class Universe {
     // maxTypesをReplicationEngineに渡す（タイプ変異の範囲制限）
     const maxTypes = this.config.worldGen.maxTypes ?? 10;
     this.replicationEngine = new ReplicationEngine({ maxTypes });
+  }
+
+  /**
+   * Beacon強度を計算（Prestigeに対し減衰付き）
+   */
+  private calculateBeaconStrength(durability: number, prestige: number): number {
+    return durability * Math.log1p(Math.max(0, prestige)) * BEACON_SCALE;
+  }
+
+  /**
+   * 維持者ステータスの有無
+   */
+  private isMaintainer(entity: Entity, tick: number): boolean {
+    return (entity.maintainerUntilTick ?? -1) > tick;
   }
 
   /**
@@ -318,16 +341,35 @@ export class Universe {
   private processEntityActions(tick: number): void {
     const entityList = Array.from(this.entities.values());
     
-    // Artifactをマップに変換
-    const artifactMap = new Map<ArtifactId, { id: ArtifactId; durability: number }>();
+    // Artifactをマップに変換し、Prestige / Beacon を集約
+    const artifactMap = new Map<ArtifactId, { id: ArtifactId; durability: number; prestige: number; nodeId: NodeId }>();
+    this.nodePrestigeMap.clear();
+    this.beaconStrengthMap.clear();
     for (const artifact of this.artifactManager.getAll()) {
-      artifactMap.set(artifact.id, { id: artifact.id, durability: artifact.durability });
+      artifactMap.set(artifact.id, {
+        id: artifact.id,
+        durability: artifact.durability,
+        prestige: artifact.prestige,
+        nodeId: artifact.nodeId,
+      });
+      const currentPrestige = this.nodePrestigeMap.get(artifact.nodeId) ?? 0;
+      this.nodePrestigeMap.set(artifact.nodeId, currentPrestige + (artifact.prestige ?? 0));
+      if (artifact.durability > BEACON_DURABILITY_THRESHOLD) {
+        const strength = this.calculateBeaconStrength(artifact.durability, artifact.prestige ?? 0);
+        const currentStrength = this.beaconStrengthMap.get(artifact.nodeId) ?? 0;
+        this.beaconStrengthMap.set(artifact.nodeId, currentStrength + strength);
+      }
     }
     
     for (const entity of entityList) {
       // ゾンビ防止: 反応等で削除された個体はスキップ
       if (!this.entities.has(entity.id)) {
         continue;
+      }
+
+      // 維持者ステータスの期限切れをクリア
+      if (entity.maintainerUntilTick && entity.maintainerUntilTick <= tick) {
+        entity.maintainerUntilTick = undefined;
       }
       
       // 知覚
@@ -337,7 +379,10 @@ export class Universe {
         this.entities,
         artifactMap,
         this.rng,
-        this.config.noiseRate
+        this.config.noiseRate,
+        this.nodePrestigeMap,
+        this.beaconStrengthMap,
+        tick
       );
 
       // 行動決定（遺伝子ベース）
@@ -352,82 +397,195 @@ export class Universe {
   }
 
   /**
-   * 遺伝子ベースの行動決定
+   * 遺伝子ベースの行動決定（特徴量→スコア→softmax選択）
    */
   private decideAction(entity: Entity, perception: Perception): Action {
-    const genes = entity.behaviorRule;
+    const rule = entity.behaviorRule;
+    const tick = this.time.getTick();
     
-    // エネルギーが低い → まず現在地で資源採取を試みる
-    const hungerThreshold = genes.getGene(GeneIndex.HungerThreshold) * 100;
-    if (entity.energy < hungerThreshold) {
-      // 現在のノードに資源があれば採取
-      if (perception.currentNode.resources.get(ResourceType.Energy) ?? 0 > 0) {
-        const harvestAmount = Math.min(20, perception.currentNode.resources.get(ResourceType.Energy) ?? 0);
-        return { type: 'harvest', amount: harvestAmount };
+    // 特徴量を抽出
+    const features = this.extractFeatures(entity, perception, tick);
+    
+    // 各行動のスコアを計算
+    const scores = rule.computeActionScores(features);
+    
+    // Softmax確率を計算（温度2.0で探索を促進）
+    const probs = BehaviorRule.softmax(scores, 2.0);
+    
+    // 確率に基づいて行動を選択
+    const actionIndex = this.sampleFromProbs(probs);
+    
+    // 選択された行動を具体的なActionに変換
+    return this.actionIndexToAction(actionIndex, entity, perception);
+  }
+
+  /**
+   * 知覚から特徴量を抽出
+   */
+  private extractFeatures(entity: Entity, perception: Perception, tick: number): Float32Array {
+    const features = new Float32Array(FEATURE_COUNT);
+    
+    // 自身のエネルギー（0-200を0-1に正規化）
+    features[FeatureIndex.SelfEnergy] = Math.min(1, entity.energy / 200);
+    
+    // 現在ノードの資源量（0-100を0-1に正規化）
+    const currentResources = perception.currentNode.resources.get(ResourceType.Energy) ?? 0;
+    features[FeatureIndex.CurrentResources] = Math.min(1, currentResources / 100);
+    
+    // 近隣ノードの最大資源量
+    let maxNeighborResources = 0;
+    for (const node of perception.neighborNodes) {
+      const res = node.resources.get(ResourceType.Energy) ?? 0;
+      if (res > maxNeighborResources) maxNeighborResources = res;
+    }
+    features[FeatureIndex.MaxNeighborResources] = Math.min(1, maxNeighborResources / 100);
+    
+    // 近くのエンティティ数（0-10を0-1に正規化）
+    features[FeatureIndex.NearbyEntityCount] = Math.min(1, perception.nearbyEntities.length / 10);
+    
+    // 現在ノードのBeacon強度
+    features[FeatureIndex.CurrentBeacon] = Math.min(1, (perception.currentNode.beaconStrength ?? 0) / 50);
+    
+    // 近隣ノードの最大Beacon強度
+    let maxNeighborBeacon = 0;
+    for (const node of perception.neighborNodes) {
+      const beacon = node.beaconStrength ?? 0;
+      if (beacon > maxNeighborBeacon) maxNeighborBeacon = beacon;
+    }
+    features[FeatureIndex.MaxNeighborBeacon] = Math.min(1, maxNeighborBeacon / 50);
+    
+    // 近くの劣化アーティファクト有無
+    const hasDamaged = perception.nearbyArtifacts.some(a => a.durability < 0.95);
+    features[FeatureIndex.HasDamagedArtifact] = hasDamaged ? 1 : 0;
+    
+    // 維持者ステータス
+    const isMaintainer = entity.maintainerUntilTick !== undefined && entity.maintainerUntilTick > tick;
+    features[FeatureIndex.IsMaintainer] = isMaintainer ? 1 : 0;
+    
+    // バイアス項
+    features[FeatureIndex.Bias] = 1;
+    
+    return features;
+  }
+
+  /**
+   * 確率分布からサンプリング
+   */
+  private sampleFromProbs(probs: Float32Array): ActionIndex {
+    const r = this.rng.random();
+    let cumulative = 0;
+    for (let i = 0; i < probs.length; i++) {
+      cumulative += probs[i]!;
+      if (r < cumulative) {
+        return i as ActionIndex;
+      }
+    }
+    return ActionIndex.Idle;
+  }
+
+  /**
+   * ActionIndexを具体的なActionに変換
+   */
+  private actionIndexToAction(actionIndex: ActionIndex, entity: Entity, perception: Perception): Action {
+    switch (actionIndex) {
+      case ActionIndex.Idle:
+        return { type: 'idle' };
+        
+      case ActionIndex.Harvest: {
+        const currentEnergy = perception.currentNode.resources.get(ResourceType.Energy) ?? 0;
+        if (currentEnergy > 0) {
+          return { type: 'harvest', amount: Math.min(20, currentEnergy) };
+        }
+        return { type: 'idle' };
       }
       
-      // 資源がなければ移動
-      if (perception.neighborNodes.length > 0) {
-        // 資源が多いノードを探す
+      case ActionIndex.MoveToResource: {
+        if (perception.neighborNodes.length === 0) return { type: 'idle' };
+        // 資源が最も多いノードへ移動
         let bestNode = perception.neighborNodes[0];
         let bestResources = 0;
         for (const node of perception.neighborNodes) {
-          let total = 0;
-          for (const amount of node.resources.values()) {
-            total += amount;
-          }
-          if (total > bestResources) {
-            bestResources = total;
+          const res = node.resources.get(ResourceType.Energy) ?? 0;
+          if (res > bestResources) {
+            bestResources = res;
             bestNode = node;
           }
         }
         if (bestNode) {
           return { type: 'move', targetNode: bestNode.id };
         }
+        return { type: 'idle' };
       }
-    }
-
-    // 複製閾値を超えている → 複製
-    const replicationThreshold = genes.getGene(GeneIndex.ReplicationThreshold) * 200;
-    if (entity.energy > replicationThreshold) {
-      // 協力性が高く、近くにエンティティがいれば協力複製
-      if (genes.getGene(GeneIndex.Cooperation) > 0.5 && perception.nearbyEntities.length > 0) {
-        const partner = perception.nearbyEntities[this.rng.randomInt(0, perception.nearbyEntities.length - 1)];
-        if (partner) {
-          return { type: 'replicate', partner: partner.id };
+      
+      case ActionIndex.MoveToBeacon: {
+        if (perception.neighborNodes.length === 0) return { type: 'idle' };
+        // Beacon強度が最も高いノードへ移動
+        let bestNode = perception.neighborNodes[0];
+        let bestBeacon = 0;
+        for (const node of perception.neighborNodes) {
+          const beacon = node.beaconStrength ?? 0;
+          if (beacon > bestBeacon) {
+            bestBeacon = beacon;
+            bestNode = node;
+          }
         }
+        if (bestNode && bestBeacon > 0) {
+          return { type: 'move', targetNode: bestNode.id };
+        }
+        // Beaconがなければランダム移動
+        const randomNode = perception.neighborNodes[this.rng.randomInt(0, perception.neighborNodes.length - 1)];
+        if (randomNode) {
+          return { type: 'move', targetNode: randomNode.id };
+        }
+        return { type: 'idle' };
       }
-      return { type: 'replicate', partner: null };
-    }
-
-    // 社会性が高い → 相互作用
-    if (this.rng.random() < genes.getGene(GeneIndex.Sociality) && perception.nearbyEntities.length > 0) {
-      const target = perception.nearbyEntities[this.rng.randomInt(0, perception.nearbyEntities.length - 1)];
-      if (target) {
-        return { type: 'interact', targetEntity: target.id, data: null };
+      
+      case ActionIndex.Explore: {
+        if (perception.neighborNodes.length === 0) return { type: 'idle' };
+        const randomNode = perception.neighborNodes[this.rng.randomInt(0, perception.neighborNodes.length - 1)];
+        if (randomNode) {
+          return { type: 'move', targetNode: randomNode.id };
+        }
+        return { type: 'idle' };
       }
-    }
-
-    // 探索性が高い → ランダム移動
-    if (this.rng.random() < genes.getGene(GeneIndex.Exploration) && perception.neighborNodes.length > 0) {
-      const target = perception.neighborNodes[this.rng.randomInt(0, perception.neighborNodes.length - 1)];
-      if (target) {
-        return { type: 'move', targetNode: target.id };
+      
+      case ActionIndex.Interact: {
+        if (perception.nearbyEntities.length === 0) return { type: 'idle' };
+        const target = perception.nearbyEntities[this.rng.randomInt(0, perception.nearbyEntities.length - 1)];
+        if (target) {
+          return { type: 'interact', targetEntity: target.id, data: null };
+        }
+        return { type: 'idle' };
       }
+      
+      case ActionIndex.Replicate: {
+        // 協力性が高く、近くにエンティティがいれば協力複製
+        if (entity.behaviorRule.getGene(GeneIndex.Cooperation) > 0.5 && perception.nearbyEntities.length > 0) {
+          const partner = this.choosePartnerWithMaintainerBias(
+            perception.nearbyEntities,
+            perception.currentNode.nodePrestige
+          );
+          if (partner) {
+            return { type: 'replicate', partner: partner.id };
+          }
+        }
+        return { type: 'replicate', partner: null };
+      }
+      
+      case ActionIndex.CreateArtifact:
+        return { type: 'createArtifact', data: entity.state.getData() };
+      
+      case ActionIndex.RepairArtifact: {
+        const damaged = perception.nearbyArtifacts.find(a => a.durability < 0.95);
+        if (damaged) {
+          return { type: 'repairArtifact', artifactId: damaged.id };
+        }
+        return { type: 'idle' };
+      }
+      
+      default:
+        return { type: 'idle' };
     }
-
-    // アーティファクト生成傾向
-    if (this.rng.random() < genes.getGene(GeneIndex.ArtifactCreation) * 0.1) {
-      return { type: 'createArtifact', data: entity.state.getData() };
-    }
-
-    // デフォルト: 資源があれば採取、なければ待機
-    const currentEnergy = perception.currentNode.resources.get(ResourceType.Energy) ?? 0;
-    if (currentEnergy > 0) {
-      return { type: 'harvest', amount: Math.min(10, currentEnergy) };
-    }
-
-    return { type: 'idle' };
   }
 
   /**
@@ -467,6 +625,9 @@ export class Universe {
         break;
       case 'createArtifact':
         this.executeCreateArtifact(entity, action.data, tick);
+        break;
+      case 'repairArtifact':
+        this.executeRepairArtifact(entity, action.artifactId, cost, tick);
         break;
       case 'harvest':
         this.executeHarvest(entity, action.amount, tick);
@@ -621,6 +782,17 @@ export class Universe {
     if (partnerId) {
       const partner = this.entities.get(partnerId);
       if (!partner || partner.nodeId !== entity.nodeId) return;
+      // ログ: パートナー選択（維持者シグナル + Prestige）
+      const isMaintainer = this.isMaintainer(partner, tick);
+      const nodePrestige = this.nodePrestigeMap.get(entity.nodeId) ?? 0;
+      this.logEvent({
+        type: 'partnerSelected',
+        entityId: entity.id,
+        partnerId: partner.id,
+        isMaintainer,
+        nodePrestige,
+        tick,
+      });
       result = this.replicationEngine.replicateWithPartner(entity, partner, this.rng);
     } else {
       result = this.replicationEngine.replicateAlone(entity, this.rng);
@@ -692,6 +864,43 @@ export class Universe {
   }
 
   /**
+   * Artifact修復実行
+   */
+  private executeRepairArtifact(entity: Entity, artifactId: ArtifactId, cost: number, tick: number): void {
+    const artifact = this.artifactManager.get(artifactId);
+    if (!artifact || artifact.nodeId !== entity.nodeId) return;
+
+    const durabilityBefore = artifact.durability;
+    const repairGain = Math.min(1 - artifact.durability, cost / REPAIR_ENERGY_PER_DURABILITY);
+    const repairResult = this.artifactManager.repair(artifactId, repairGain, cost);
+
+    if (!repairResult.success) {
+      return;
+    }
+
+    // Maintainerボーナス付与
+    const duration = this.rng.randomInt(MAINTAINER_DURATION_MIN, MAINTAINER_DURATION_MAX);
+    entity.maintainerUntilTick = tick + duration;
+
+    this.logEvent({
+      type: 'artifactRepaired',
+      entityId: entity.id,
+      artifactId,
+      energyConsumed: cost,
+      durabilityBefore,
+      durabilityAfter: repairResult.after,
+      tick,
+    });
+
+    this.logEvent({
+      type: 'maintainerGranted',
+      entityId: entity.id,
+      untilTick: entity.maintainerUntilTick,
+      tick,
+    });
+  }
+
+  /**
    * 資源採取実行
    * 公理19: タイプごとのharvestEfficiencyを反映
    */
@@ -717,6 +926,46 @@ export class Universe {
         tick,
       });
     }
+  }
+
+  /**
+   * 重み付き選択（重みが全て0の場合はランダム）
+   */
+  private pickWeighted<T>(items: T[], weights: number[]): T | null {
+    if (items.length === 0) return null;
+    let total = 0;
+    for (const w of weights) {
+      total += Math.max(0, w);
+    }
+    if (total <= 0) {
+      return items[this.rng.randomInt(0, items.length - 1)] ?? null;
+    }
+    let r = this.rng.random() * total;
+    for (let i = 0; i < items.length; i++) {
+      r -= Math.max(0, weights[i] ?? 0);
+      if (r <= 0) {
+        return items[i] ?? null;
+      }
+    }
+    return items[items.length - 1] ?? null;
+  }
+
+  /**
+   * 維持者シグナル + Prestige に基づくパートナー選好
+   */
+  private choosePartnerWithMaintainerBias(
+    candidates: { id: EntityId; isMaintainer: boolean }[],
+    nodePrestige: number
+  ): { id: EntityId; isMaintainer: boolean } | null {
+    if (candidates.length === 0) return null;
+
+    const prestigeFactor = 1 + Math.log1p(Math.max(0, nodePrestige));
+    const weights = candidates.map(c => {
+      const maintainerWeight = c.isMaintainer ? 1 + PARTNER_MAINTAINER_BONUS : 1;
+      return maintainerWeight * prestigeFactor;
+    });
+
+    return this.pickWeighted(candidates, weights);
   }
 
   /**
@@ -765,7 +1014,6 @@ export class Universe {
    */
   getStats(): SimulationStats {
     const entities = Array.from(this.entities.values());
-    const totalEnergy = entities.reduce((sum, e) => sum + e.energy, 0);
     const totalAge = entities.reduce((sum, e) => sum + e.age, 0);
 
     // 空間分布を計算
@@ -793,10 +1041,39 @@ export class Universe {
     const deathCount = recentEvents.filter(e => e.type === 'entityDied').length;
     const reactionCount = this.reactionLog.filter(e => e.tick === tick).length;
 
+    // エネルギー内訳
+    const breakdown = this.getEnergyBreakdown();
+
+    // アーティファクト関連メトリクス
+    const artifacts = this.artifactManager.getAll();
+    const repairCount = this.eventLog.filter(e => e.type === 'artifactRepaired' && e.tick === tick).length;
+    const totalPrestige = artifacts.reduce((sum, a) => sum + (a.prestige ?? 0), 0);
+    const beaconStrengths = artifacts
+      .filter(a => a.durability >= 0.5)
+      .map(a => a.durability * (a.prestige ?? 1));
+    const avgBeaconStrength = beaconStrengths.length > 0
+      ? beaconStrengths.reduce((a, b) => a + b, 0) / beaconStrengths.length
+      : 0;
+    const maintainerCount = entities.filter(e => 
+      e.maintainerUntilTick !== undefined && e.maintainerUntilTick > tick
+    ).length;
+    
+    // アーティファクト年齢
+    const artifactAges = artifacts.map(a => tick - a.createdAt);
+    const avgArtifactAge = artifactAges.length > 0
+      ? artifactAges.reduce((a, b) => a + b, 0) / artifactAges.length
+      : 0;
+    const maxArtifactAge = artifactAges.length > 0
+      ? Math.max(...artifactAges)
+      : 0;
+
+    // 空間集中度（ジニ係数）
+    const spatialGini = this.calculateGini(Array.from(spatialDistribution.values()));
+
     return {
       tick,
       entityCount: entities.length,
-      totalEnergy,
+      totalEnergy: breakdown.entityEnergy,  // 従来互換: エンティティ保持分
       artifactCount: this.artifactManager.count,
       averageAge: entities.length > 0 ? totalAge / entities.length : 0,
       spatialDistribution,
@@ -806,7 +1083,36 @@ export class Universe {
       typeDistribution,
       totalMass,
       reactionCount,
+      // エネルギー内訳（新規）
+      entityEnergy: breakdown.entityEnergy,
+      freeEnergy: breakdown.freeEnergy,
+      wasteHeat: breakdown.wasteHeat,
+      // アーティファクト永続化メトリクス
+      repairCount,
+      totalPrestige,
+      avgBeaconStrength,
+      maintainerCount,
+      avgArtifactAge,
+      maxArtifactAge,
+      spatialGini,
     };
+  }
+
+  /**
+   * ジニ係数を計算（0=完全均等、1=完全集中）
+   */
+  private calculateGini(values: number[]): number {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const n = sorted.length;
+    const sum = sorted.reduce((a, b) => a + b, 0);
+    if (sum === 0) return 0;
+    
+    let numerator = 0;
+    for (let i = 0; i < n; i++) {
+      numerator += (2 * (i + 1) - n - 1) * sorted[i]!;
+    }
+    return numerator / (n * sum);
   }
 
   /**
@@ -870,5 +1176,12 @@ export class Universe {
    */
   getTypeRegistry(): TypeRegistry {
     return this.typeRegistry;
+  }
+
+  /**
+   * 全Artifact取得
+   */
+  getAllArtifacts(): import('./artifact.js').Artifact[] {
+    return this.artifactManager.getAll();
   }
 }
