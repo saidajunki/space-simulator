@@ -30,6 +30,21 @@ const PARTNER_MAINTAINER_BONUS = 1.0;
 const BEACON_ATTRACTION_WEIGHT = 1.0;
 const MAINTAINER_DURATION_MIN = 10;
 const MAINTAINER_DURATION_MAX = 50;
+
+/**
+ * 土地（ノード）の状態情報
+ */
+export interface LandscapeInfo {
+  nodeId: NodeId;
+  resources: number;
+  entityCount: number;
+  artifactCount: number;
+  totalPrestige: number;
+  beaconStrength: number;
+  harvestBonus: number;
+  wasteHeat: number;
+}
+
 /**
  * Universe設定
  */
@@ -903,6 +918,7 @@ export class Universe {
   /**
    * 資源採取実行
    * 公理19: タイプごとのharvestEfficiencyを反映
+   * アーティファクトによる局所効果（採取効率向上）を追加
    */
   private executeHarvest(entity: Entity, amount: number, tick: number): void {
     const node = this.space.getNode(entity.nodeId);
@@ -911,7 +927,11 @@ export class Universe {
     // タイプの採取効率を取得（公理19: 物質多様性）
     const entityType = entity.type ?? 0;
     const typeProps = this.typeRegistry.getTypeProperties(entityType);
-    const efficiency = typeProps.harvestEfficiency;
+    const baseEfficiency = typeProps.harvestEfficiency;
+    
+    // アーティファクトによる局所効果（採取効率ボーナス）
+    const artifactBonus = this.calculateArtifactHarvestBonus(entity.nodeId);
+    const efficiency = baseEfficiency * (1 + artifactBonus);
     
     // 効率を反映した採取量
     const adjustedAmount = amount * efficiency;
@@ -926,6 +946,25 @@ export class Universe {
         tick,
       });
     }
+  }
+
+  /**
+   * アーティファクトによる採取効率ボーナスを計算
+   * durabilityに比例（道具効果）
+   */
+  private calculateArtifactHarvestBonus(nodeId: NodeId): number {
+    const artifacts = this.artifactManager.getByNode(nodeId);
+    if (artifacts.length === 0) return 0;
+    
+    // 各アーティファクトのdurabilityの合計 × 係数
+    const ARTIFACT_HARVEST_BONUS_RATE = 0.1; // durability 1.0あたり10%ボーナス
+    let totalBonus = 0;
+    for (const artifact of artifacts) {
+      totalBonus += artifact.durability * ARTIFACT_HARVEST_BONUS_RATE;
+    }
+    
+    // 最大50%ボーナスに制限
+    return Math.min(0.5, totalBonus);
   }
 
   /**
@@ -1113,6 +1152,44 @@ export class Universe {
       numerator += (2 * (i + 1) - n - 1) * sorted[i]!;
     }
     return numerator / (n * sum);
+  }
+
+  /**
+   * 土地（ノード）の状態を取得
+   */
+  getLandscape(): LandscapeInfo[] {
+    const nodes = this.space.getAllNodes();
+    const tick = this.time.getTick();
+    const result: LandscapeInfo[] = [];
+
+    for (const node of nodes) {
+      const artifacts = this.artifactManager.getByNode(node.id);
+      const entities = Array.from(this.entities.values()).filter(e => e.nodeId === node.id);
+      const harvestBonus = this.calculateArtifactHarvestBonus(node.id);
+      
+      // Beacon強度計算
+      let beaconStrength = 0;
+      let totalPrestige = 0;
+      for (const artifact of artifacts) {
+        totalPrestige += artifact.prestige ?? 0;
+        if (artifact.durability >= BEACON_DURABILITY_THRESHOLD) {
+          beaconStrength += artifact.durability * (artifact.prestige ?? 1) * BEACON_SCALE;
+        }
+      }
+
+      result.push({
+        nodeId: node.id,
+        resources: node.resources.get(ResourceType.Energy) ?? 0,
+        entityCount: entities.length,
+        artifactCount: artifacts.length,
+        totalPrestige,
+        beaconStrength,
+        harvestBonus,
+        wasteHeat: node.wasteHeat ?? 0,
+      });
+    }
+
+    return result;
   }
 
   /**

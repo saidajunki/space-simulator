@@ -228,6 +228,13 @@ export class LocalRunner {
   }
 
   /**
+   * 土地の状態を取得
+   */
+  getLandscape(): import('./universe.js').LandscapeInfo[] | undefined {
+    return this.universe?.getLandscape();
+  }
+
+  /**
    * スナップショットを作成
    */
   private createSnapshot(): UniverseState {

@@ -352,6 +352,29 @@ function runSingle(options: CLIOptions): void {
         console.log(`  Max artifact age: ${finalStats.maxArtifactAge ?? 0}`);
         console.log(`  Spatial Gini: ${(finalStats.spatialGini ?? 0).toFixed(3)}`);
       }
+
+      // 土地の状態表示
+      const landscape = runner.getLandscape();
+      if (landscape && landscape.length > 0) {
+        console.log('');
+        console.log('=== Landscape (Top 10 by activity) ===');
+        // 活動度（エンティティ数+アーティファクト数+資源）でソート
+        const sorted = [...landscape].sort((a, b) => {
+          const scoreA = a.entityCount * 10 + a.artifactCount * 5 + a.resources / 10;
+          const scoreB = b.entityCount * 10 + b.artifactCount * 5 + b.resources / 10;
+          return scoreB - scoreA;
+        }).slice(0, 10);
+        
+        for (const land of sorted) {
+          const bonus = land.harvestBonus > 0 ? ` +${(land.harvestBonus * 100).toFixed(0)}%` : '';
+          console.log(
+            `  ${land.nodeId}: ` +
+            `E=${land.entityCount} A=${land.artifactCount} ` +
+            `R=${land.resources.toFixed(0)} P=${land.totalPrestige.toFixed(0)} ` +
+            `B=${land.beaconStrength.toFixed(1)}${bonus}`
+          );
+        }
+      }
     }
   }
 }
