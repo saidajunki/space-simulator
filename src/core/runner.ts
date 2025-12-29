@@ -221,6 +221,13 @@ export class LocalRunner {
   }
 
   /**
+   * エネルギー内訳を取得
+   */
+  getEnergyBreakdown(): { entityEnergy: number; freeEnergy: number; wasteHeat: number } | undefined {
+    return this.universe?.getEnergyBreakdown();
+  }
+
+  /**
    * スナップショットを作成
    */
   private createSnapshot(): UniverseState {

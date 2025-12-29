@@ -330,6 +330,16 @@ function runSingle(options: CLIOptions): void {
       console.log(`  Total energy: ${finalStats.totalEnergy.toFixed(0)}`);
       console.log(`  Artifacts: ${finalStats.artifactCount}`);
       console.log(`  Average age: ${finalStats.averageAge.toFixed(1)}`);
+      
+      // エネルギー内訳
+      const breakdown = runner.getEnergyBreakdown();
+      if (breakdown) {
+        console.log('');
+        console.log('=== Energy Breakdown ===');
+        console.log(`  Entity energy: ${breakdown.entityEnergy.toFixed(1)}`);
+        console.log(`  Free energy (harvestable): ${breakdown.freeEnergy.toFixed(1)}`);
+        console.log(`  Waste heat (non-harvestable): ${breakdown.wasteHeat.toFixed(1)}`);
+      }
     }
   }
 }

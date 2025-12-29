@@ -102,10 +102,22 @@ export class InteractionEngine {
 
     if (coopScore > aggScore && coopScore > 0.5) {
       interactionType = 'cooperative';
-      // 協力: 両者にボーナス（エネルギー効率向上）
-      const bonus = 5 * this.config.cooperationEfficiency;
-      initiatorEnergyChange = noiseOccurred ? bonus * rng.random() : bonus;
-      targetEnergyChange = noiseOccurred ? bonus * rng.random() : bonus;
+      // 協力: エネルギー移転の効率化（総和0、ただし効率ボーナスあり）
+      // 保存則: 両者のエネルギー変化の総和は0
+      // 協力のメリットは「採取効率向上」として別途実装
+      const transfer = Math.min(initiator.energy, target.energy) * 0.1;
+      // 協力では弱い方に移転（相互扶助）
+      if (initiator.energy > target.energy) {
+        initiatorEnergyChange = -transfer;
+        targetEnergyChange = transfer;
+      } else {
+        initiatorEnergyChange = transfer;
+        targetEnergyChange = -transfer;
+      }
+      if (noiseOccurred) {
+        initiatorEnergyChange *= rng.random();
+        targetEnergyChange *= rng.random();
+      }
     } else if (aggScore > coopScore && aggScore > 0.5) {
       interactionType = 'competitive';
       // 競争: 強い方がエネルギーを奪う

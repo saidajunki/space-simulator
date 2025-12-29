@@ -248,11 +248,17 @@ export class Universe {
 
     // エンティティとノードのマッピングを作成（維持コストの散逸先）
     const entityNodeMap = new Map<EntityId, Node>();
+    // 公理19: エンティティのstabilityマップを作成
+    const entityStabilityMap = new Map<EntityId, number>();
     for (const entity of entities) {
       const node = this.space.getNode(entity.nodeId);
       if (node) {
         entityNodeMap.set(entity.id, node);
       }
+      // タイプのstabilityを取得
+      const entityType = entity.type ?? 0;
+      const typeProps = this.typeRegistry.getTypeProperties(entityType);
+      entityStabilityMap.set(entity.id, typeProps.stability);
     }
 
     const result = this.entropyEngine.applyEntropy(
@@ -261,11 +267,20 @@ export class Universe {
       edges,
       nodeResources,
       entityNodeMap,
-      this.rng
+      this.rng,
+      entityStabilityMap
     );
 
     // 消滅したArtifactを削除
     for (const artifactId of result.decayedArtifacts) {
+      const artifact = this.artifactManager.get(artifactId);
+      if (artifact) {
+        // ノードのartifactIdsから削除
+        const node = this.space.getNode(artifact.nodeId);
+        if (node) {
+          node.artifactIds.delete(artifactId);
+        }
+      }
       this.artifactManager.remove(artifactId);
       this.logEvent({
         type: 'artifactDecayed',
@@ -534,6 +549,16 @@ export class Universe {
       totalEnergyChange
     );
     this.reactionLog.push(reactionEvent);
+    
+    // イベントログにも記録（observation.tsの型定義に合わせる）
+    this.logEvent({
+      type: 'reaction',
+      tick,
+      nodeId: entity1.nodeId,
+      reactantTypes: [entity1.type ?? 0, entity2.type ?? 0],
+      productTypes: productsInfo.map(p => p.type),
+      energyDelta: totalEnergyChange,
+    });
 
     // ノードからエンティティIDを削除
     const node = this.space.getNode(entity1.nodeId);
@@ -648,6 +673,13 @@ export class Universe {
       entity.energy -= result.energyConsumed;
       // エネルギー保存則: Artifact生成コストは環境に散逸
       this.dissipateEnergyToNode(entity.nodeId, result.energyConsumed);
+      
+      // ノードのartifactIdsを更新
+      const node = this.space.getNode(entity.nodeId);
+      if (node) {
+        node.artifactIds.add(result.artifact.id);
+      }
+      
       this.logEvent({
         type: 'artifactCreated',
         artifactId: result.artifact.id,
@@ -659,12 +691,21 @@ export class Universe {
 
   /**
    * 資源採取実行
+   * 公理19: タイプごとのharvestEfficiencyを反映
    */
   private executeHarvest(entity: Entity, amount: number, tick: number): void {
     const node = this.space.getNode(entity.nodeId);
     if (!node) return;
 
-    const harvested = this.energySystem.harvestFromNode(entity, node, amount);
+    // タイプの採取効率を取得（公理19: 物質多様性）
+    const entityType = entity.type ?? 0;
+    const typeProps = this.typeRegistry.getTypeProperties(entityType);
+    const efficiency = typeProps.harvestEfficiency;
+    
+    // 効率を反映した採取量
+    const adjustedAmount = amount * efficiency;
+    
+    const harvested = this.energySystem.harvestFromNode(entity, node, adjustedAmount);
     if (harvested > 0) {
       this.logEvent({
         type: 'harvest',
@@ -791,20 +832,41 @@ export class Universe {
    * 総エネルギー取得
    */
   getTotalEnergy(): number {
-    let total = 0;
+    const breakdown = this.getEnergyBreakdown();
+    return breakdown.entityEnergy + breakdown.freeEnergy + breakdown.wasteHeat;
+  }
+
+  /**
+   * エネルギー内訳を取得
+   * freeEnergy: 採取可能なエネルギー（ノード資源）
+   * wasteHeat: 採取不可の廃熱（徐々に宇宙に放散）
+   * entityEnergy: エンティティが保持するエネルギー
+   */
+  getEnergyBreakdown(): { entityEnergy: number; freeEnergy: number; wasteHeat: number } {
+    let entityEnergy = 0;
+    let freeEnergy = 0;
+    let wasteHeat = 0;
     
     // Entity
     for (const entity of this.entities.values()) {
-      total += entity.energy;
+      entityEnergy += entity.energy;
     }
     
-    // Node resources
+    // Node resources (freeEnergy) and wasteHeat
     for (const node of this.space.getAllNodes()) {
       for (const amount of node.resources.values()) {
-        total += amount;
+        freeEnergy += amount;
       }
+      wasteHeat += node.wasteHeat;
     }
     
-    return total;
+    return { entityEnergy, freeEnergy, wasteHeat };
+  }
+
+  /**
+   * TypeRegistry取得（外部からの参照用）
+   */
+  getTypeRegistry(): TypeRegistry {
+    return this.typeRegistry;
   }
 }
