@@ -52,7 +52,7 @@
     - `on`/`off`で切り替え可能
     - _Requirements: 4.4_
 
-- [-] 7. Checkpoint - テスト実行
+- [x] 7. Checkpoint - テスト実行
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ]* 8. 統合テスト
