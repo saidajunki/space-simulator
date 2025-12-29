@@ -29,6 +29,8 @@ interface CLIOptions {
   maxTypes?: number;
   // 道具効果ON/OFF
   toolEffect?: boolean;
+  // 知識ボーナスON/OFF
+  knowledgeBonus?: boolean;
   // レジーム探索用
   regenRates?: string;
   toolEffectAB?: boolean;
@@ -82,6 +84,9 @@ function parseArgs(args: string[]): CLIOptions {
     } else if (arg === '--tool-effect') {
       const val = args[++i] ?? 'on';
       options.toolEffect = val.toLowerCase() === 'on' || val === 'true' || val === '1';
+    } else if (arg === '--knowledge-bonus') {
+      const val = args[++i] ?? 'on';
+      options.knowledgeBonus = val.toLowerCase() === 'on' || val === 'true' || val === '1';
     } else if (arg === '--regen-rates') {
       options.regenRates = args[++i] ?? '';
     } else if (arg === '--tool-effect-ab') {
@@ -114,6 +119,7 @@ Options:
   --entities, -e <number>    Initial entity count (default: 50)
   --max-types <number>       Maximum material types (default: 10)
   --tool-effect <on|off>     Enable/disable artifact tool effects (default: on)
+  --knowledge-bonus <on|off> Enable/disable knowledge bonus for repair (default: on)
   --log-freq <number>        Log frequency in ticks (default: 100)
   --snapshot-freq <number>   Snapshot frequency in ticks (default: 1000)
   --parallel, -p <number>    Parallel runs for batch (default: 1)
@@ -204,6 +210,7 @@ function runSingle(options: CLIOptions): void {
         maxTypes: options.maxTypes || 10,
       },
       toolEffectEnabled: options.toolEffect !== false,  // デフォルトはtrue
+      knowledgeBonusEnabled: options.knowledgeBonus !== false,  // デフォルトはtrue
     },
     seed: options.seed || 12345,
     maxTicks: options.maxTicks || 1000,

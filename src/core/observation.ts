@@ -16,7 +16,7 @@ export type SimulationEvent =
   | { type: 'replication'; parentId: EntityId; childId: EntityId; tick: number }
   | { type: 'artifactCreated'; artifactId: string; nodeId: NodeId; tick: number }
   | { type: 'artifactDecayed'; artifactId: string; tick: number }
-  | { type: 'artifactRepaired'; entityId: EntityId; artifactId: ArtifactId; energyConsumed: number; durabilityBefore: number; durabilityAfter: number; tick: number }
+  | { type: 'artifactRepaired'; entityId: EntityId; artifactId: ArtifactId; energyConsumed: number; durabilityBefore: number; durabilityAfter: number; similarity: number; knowledgeBonus: number; tick: number }
   | { type: 'maintainerGranted'; entityId: EntityId; untilTick: number; tick: number }
   | { type: 'partnerSelected'; entityId: EntityId; partnerId: EntityId; isMaintainer: boolean; nodePrestige: number; tick: number }
   | { type: 'harvest'; entityId: EntityId; nodeId: NodeId; amount: number; tick: number }
@@ -55,6 +55,15 @@ export interface SimulationStats {
   maxArtifactAge?: number;
   // 空間集中度（ジニ係数）
   spatialGini?: number;
+  // 知識関連メトリクス（情報→行動の接続）
+  knowledge?: {
+    /** 平均一致度 */
+    avgSimilarity: number;
+    /** 修復回数（このtick） */
+    repairCountThisTick: number;
+    /** ボーナス適用回数（similarity > 0.5） */
+    bonusAppliedCount: number;
+  };
 }
 
 /**

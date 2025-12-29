@@ -22,6 +22,7 @@ import { Action } from './action.js';
 import { SimulationEvent, SimulationStats } from './observation.js';
 import { TypeRegistry } from './type-registry.js';
 import { ReactionEngine, ReactionEvent } from './reaction.js';
+import { calculateSimilarity, calculateKnowledgeBonus } from './similarity.js';
 
 const BEACON_DURABILITY_THRESHOLD = 0.5;
 const BEACON_SCALE = 1.0;
@@ -64,6 +65,8 @@ export interface UniverseConfig {
   wasteHeatRadiationRate: number;
   /** 道具効果（採取効率・シェルター）を有効にするか */
   toolEffectEnabled: boolean;
+  /** 知識ボーナス（情報一致度による修復効率向上）を有効にするか */
+  knowledgeBonusEnabled: boolean;
 }
 
 /**
@@ -77,6 +80,7 @@ export const DEFAULT_UNIVERSE_CONFIG: UniverseConfig = {
   resourceRegenerationRate: 0.008,  // バランス調整
   wasteHeatRadiationRate: 0.3,
   toolEffectEnabled: true,  // デフォルトはON
+  knowledgeBonusEnabled: true,  // デフォルトはON
 };
 
 /**
@@ -904,13 +908,24 @@ export class Universe {
 
   /**
    * Artifact修復実行
+   * 情報→行動の接続: entity.stateとartifact.dataの一致度が修復効率に影響
    */
   private executeRepairArtifact(entity: Entity, artifactId: ArtifactId, cost: number, tick: number): void {
     const artifact = this.artifactManager.get(artifactId);
     if (!artifact || artifact.nodeId !== entity.nodeId) return;
 
+    // 情報→行動の接続: 一致度計算
+    const similarity = calculateSimilarity(entity.state.getData(), artifact.data);
+    
+    // 知識ボーナス計算（設定で無効化可能）
+    const knowledgeBonus = this.config.knowledgeBonusEnabled 
+      ? calculateKnowledgeBonus(similarity) 
+      : 1.0;
+
     const durabilityBefore = artifact.durability;
-    const repairGain = Math.min(1 - artifact.durability, cost / REPAIR_ENERGY_PER_DURABILITY);
+    // ボーナスを適用した修復量
+    const baseRepairGain = Math.min(1 - artifact.durability, cost / REPAIR_ENERGY_PER_DURABILITY);
+    const repairGain = baseRepairGain * knowledgeBonus;
     const repairResult = this.artifactManager.repair(artifactId, repairGain, cost);
 
     if (!repairResult.success) {
@@ -928,6 +943,8 @@ export class Universe {
       energyConsumed: cost,
       durabilityBefore,
       durabilityAfter: repairResult.after,
+      similarity,
+      knowledgeBonus,
       tick,
     });
 
@@ -1193,6 +1210,18 @@ export class Universe {
     // 空間集中度（ジニ係数）
     const spatialGini = this.calculateGini(Array.from(spatialDistribution.values()));
 
+    // 知識関連メトリクス（情報→行動の接続）
+    const repairEvents = this.eventLog.filter(
+      e => e.type === 'artifactRepaired' && e.tick === tick
+    ) as Array<{ type: 'artifactRepaired'; similarity: number; knowledgeBonus: number }>;
+    const knowledge = {
+      avgSimilarity: repairEvents.length > 0
+        ? repairEvents.reduce((sum, e) => sum + e.similarity, 0) / repairEvents.length
+        : 0,
+      repairCountThisTick: repairEvents.length,
+      bonusAppliedCount: repairEvents.filter(e => e.knowledgeBonus > 1.0).length,
+    };
+
     return {
       tick,
       entityCount: entities.length,
@@ -1218,6 +1247,8 @@ export class Universe {
       avgArtifactAge,
       maxArtifactAge,
       spatialGini,
+      // 知識関連メトリクス
+      knowledge,
     };
   }
 
