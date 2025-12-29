@@ -12,11 +12,11 @@ export type SimulationEvent =
   | { type: 'entityCreated'; entityId: EntityId; nodeId: NodeId; tick: number }
   | { type: 'entityDied'; entityId: EntityId; cause: string; tick: number }
   | { type: 'entityMoved'; entityId: EntityId; from: NodeId; to: NodeId; tick: number }
-  | { type: 'interaction'; initiator: EntityId; target: EntityId; tick: number }
-  | { type: 'replication'; parentId: EntityId; childId: EntityId; tick: number }
+  | { type: 'interaction'; initiator: EntityId; target: EntityId; tick: number; exchangedBytesA?: number; exchangedBytesB?: number }
+  | { type: 'replication'; parentId: EntityId; childId: EntityId; tick: number; inheritedBytes?: number; mutatedBits?: number }
   | { type: 'artifactCreated'; artifactId: string; nodeId: NodeId; tick: number }
   | { type: 'artifactDecayed'; artifactId: string; tick: number }
-  | { type: 'artifactRepaired'; entityId: EntityId; artifactId: ArtifactId; energyConsumed: number; durabilityBefore: number; durabilityAfter: number; similarity: number; knowledgeBonus: number; tick: number }
+  | { type: 'artifactRepaired'; entityId: EntityId; artifactId: ArtifactId; energyConsumed: number; durabilityBefore: number; durabilityAfter: number; similarity: number; knowledgeBonus: number; acquiredBytes?: number; tick: number }
   | { type: 'maintainerGranted'; entityId: EntityId; untilTick: number; tick: number }
   | { type: 'partnerSelected'; entityId: EntityId; partnerId: EntityId; isMaintainer: boolean; nodePrestige: number; tick: number }
   | { type: 'harvest'; entityId: EntityId; nodeId: NodeId; amount: number; tick: number }
@@ -63,6 +63,19 @@ export interface SimulationStats {
     repairCountThisTick: number;
     /** ボーナス適用回数（similarity > 0.5） */
     bonusAppliedCount: number;
+  };
+  // 情報伝達メトリクス
+  informationTransfer?: {
+    /** 平均state容量使用率 */
+    avgStateFillRate: number;
+    /** 情報交換回数（このtick） */
+    exchangeCount: number;
+    /** 情報継承回数（このtick） */
+    inheritanceCount: number;
+    /** 情報取得回数（このtick） */
+    acquisitionCount: number;
+    /** 情報多様性（ユニークなstateパターン数） */
+    diversity: number;
   };
 }
 

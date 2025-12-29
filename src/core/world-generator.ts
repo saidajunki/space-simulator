@@ -11,6 +11,11 @@ import { RandomGenerator } from './random.js';
 import { BehaviorRule } from './behavior-rule.js';
 import { TerrainType, ResourceType, NodeId, createNodeId, createEdgeId } from './types.js';
 import { TypeRegistry } from './type-registry.js';
+import { 
+  InformationTransferConfig, 
+  DEFAULT_INFORMATION_TRANSFER_CONFIG,
+  initializeState,
+} from './information-transfer.js';
 
 /**
  * 世界生成設定
@@ -43,6 +48,8 @@ export interface WorldGenConfig {
   // 公理19-21: 物質の多様性
   /** 最大タイプ数 */
   maxTypes: number;
+  /** 情報伝達設定 */
+  informationTransfer: InformationTransferConfig;
 }
 
 /**
@@ -65,6 +72,7 @@ export const DEFAULT_WORLD_GEN_CONFIG: WorldGenConfig = {
   edgeDangerMean: 0.1,
   edgeDangerStdDev: 0.05,
   maxTypes: 10,
+  informationTransfer: DEFAULT_INFORMATION_TRANSFER_CONFIG,
 };
 
 /**
@@ -269,6 +277,10 @@ export class WorldGenerator {
       };
 
       const entity = createEntity(params, rng);
+      
+      // 初期stateを生成（情報伝達機能）
+      initializeState(entity.state, this.config.informationTransfer, rng);
+      
       entities.push(entity);
       
       // ノードにエンティティIDを登録

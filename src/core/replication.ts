@@ -5,6 +5,11 @@
 
 import { Entity, createEntity } from './entity.js';
 import { RandomGenerator } from './random.js';
+import { 
+  InformationTransferConfig, 
+  DEFAULT_INFORMATION_TRANSFER_CONFIG,
+  inheritInformation,
+} from './information-transfer.js';
 
 /** タイプ変異率（公理19） */
 const TYPE_MUTATION_RATE = 0.01;
@@ -25,6 +30,8 @@ export interface ReplicationConfig {
   cooperativeBonus: number;
   /** 最大タイプ数（タイプ変異用） */
   maxTypes: number;
+  /** 情報伝達設定 */
+  informationTransfer: InformationTransferConfig;
 }
 
 /**
@@ -37,6 +44,7 @@ export const DEFAULT_REPLICATION_CONFIG: ReplicationConfig = {
   childStateCapacity: 256,
   cooperativeBonus: 1.2,
   maxTypes: 10,
+  informationTransfer: DEFAULT_INFORMATION_TRANSFER_CONFIG,
 };
 
 /**
@@ -53,6 +61,10 @@ export interface ReplicationResult {
   failureReason?: string;
   /** タイプ変異が発生したか（公理19） */
   typeMutated?: boolean;
+  /** 継承された情報量（バイト） */
+  inheritedBytes?: number;
+  /** 変異したビット数 */
+  mutatedBits?: number;
 }
 
 /**
@@ -125,11 +137,22 @@ export class ReplicationEngine {
       composition: [childType],
     }, rng);
 
+    // 情報継承（親から子へ）
+    const inheritanceResult = inheritInformation(
+      child.state,
+      parent.state,
+      null,
+      this.config.informationTransfer,
+      rng
+    );
+
     return {
       success: true,
       child,
       energyConsumed: this.config.energyCost + childEnergy,
       typeMutated,
+      inheritedBytes: inheritanceResult.inheritedBytes,
+      mutatedBits: inheritanceResult.mutatedBits,
     };
   }
 
@@ -205,11 +228,22 @@ export class ReplicationEngine {
       composition: [childType],
     }, rng);
 
+    // 情報継承（両親から子へ、混合）
+    const inheritanceResult = inheritInformation(
+      child.state,
+      parent1.state,
+      parent2.state,
+      this.config.informationTransfer,
+      rng
+    );
+
     return {
       success: true,
       child,
       energyConsumed: this.config.energyCost + childEnergy,
       typeMutated,
+      inheritedBytes: inheritanceResult.inheritedBytes,
+      mutatedBits: inheritanceResult.mutatedBits,
     };
   }
 

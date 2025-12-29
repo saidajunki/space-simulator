@@ -23,6 +23,12 @@ import { SimulationEvent, SimulationStats } from './observation.js';
 import { TypeRegistry } from './type-registry.js';
 import { ReactionEngine, ReactionEvent } from './reaction.js';
 import { calculateSimilarity, calculateKnowledgeBonus } from './similarity.js';
+import { 
+  InformationTransferConfig, 
+  DEFAULT_INFORMATION_TRANSFER_CONFIG,
+  exchangeInformation,
+  acquireInformation,
+} from './information-transfer.js';
 
 const BEACON_DURABILITY_THRESHOLD = 0.5;
 const BEACON_SCALE = 1.0;
@@ -67,6 +73,8 @@ export interface UniverseConfig {
   toolEffectEnabled: boolean;
   /** 知識ボーナス（情報一致度による修復効率向上）を有効にするか */
   knowledgeBonusEnabled: boolean;
+  /** 情報伝達設定 */
+  informationTransfer: InformationTransferConfig;
 }
 
 /**
@@ -81,6 +89,7 @@ export const DEFAULT_UNIVERSE_CONFIG: UniverseConfig = {
   wasteHeatRadiationRate: 0.3,
   toolEffectEnabled: true,  // デフォルトはON
   knowledgeBonusEnabled: true,  // デフォルトはON
+  informationTransfer: DEFAULT_INFORMATION_TRANSFER_CONFIG,
 };
 
 /**
@@ -715,6 +724,14 @@ export class Universe {
       return;
     }
 
+    // 情報交換（情報伝達機能）
+    const exchangeResult = exchangeInformation(
+      entity,
+      target,
+      this.config.informationTransfer,
+      this.rng
+    );
+
     // 通常の相互作用
     const result = this.interactionEngine.process(entity, target, null, this.rng);
     
@@ -727,6 +744,8 @@ export class Universe {
         initiator: entity.id,
         target: targetId,
         tick,
+        exchangedBytesA: exchangeResult.exchangedBytesA,
+        exchangedBytesB: exchangeResult.exchangedBytesB,
       });
     }
   }
@@ -869,6 +888,8 @@ export class Universe {
         parentId: entity.id,
         childId: result.child.id,
         tick,
+        ...(result.inheritedBytes !== undefined && { inheritedBytes: result.inheritedBytes }),
+        ...(result.mutatedBits !== undefined && { mutatedBits: result.mutatedBits }),
       });
     }
   }
@@ -932,6 +953,14 @@ export class Universe {
       return;
     }
 
+    // 情報取得（修復量に比例してアーティファクトから情報を取得）
+    const acquisitionResult = acquireInformation(
+      entity.state,
+      artifact.data,
+      repairGain,
+      this.config.informationTransfer
+    );
+
     // Maintainerボーナス付与
     const duration = this.rng.randomInt(MAINTAINER_DURATION_MIN, MAINTAINER_DURATION_MAX);
     entity.maintainerUntilTick = tick + duration;
@@ -945,6 +974,7 @@ export class Universe {
       durabilityAfter: repairResult.after,
       similarity,
       knowledgeBonus,
+      acquiredBytes: acquisitionResult.acquiredBytes,
       tick,
     });
 
@@ -1213,13 +1243,48 @@ export class Universe {
     // 知識関連メトリクス（情報→行動の接続）
     const repairEvents = this.eventLog.filter(
       e => e.type === 'artifactRepaired' && e.tick === tick
-    ) as Array<{ type: 'artifactRepaired'; similarity: number; knowledgeBonus: number }>;
+    ) as Array<{ type: 'artifactRepaired'; similarity: number; knowledgeBonus: number; acquiredBytes?: number }>;
     const knowledge = {
       avgSimilarity: repairEvents.length > 0
         ? repairEvents.reduce((sum, e) => sum + e.similarity, 0) / repairEvents.length
         : 0,
       repairCountThisTick: repairEvents.length,
       bonusAppliedCount: repairEvents.filter(e => e.knowledgeBonus > 1.0).length,
+    };
+
+    // 情報伝達メトリクス
+    const interactionEvents = this.eventLog.filter(
+      e => e.type === 'interaction' && e.tick === tick
+    ) as Array<{ type: 'interaction'; exchangedBytesA?: number; exchangedBytesB?: number }>;
+    const replicationEvents = this.eventLog.filter(
+      e => e.type === 'replication' && e.tick === tick
+    ) as Array<{ type: 'replication'; inheritedBytes?: number }>;
+    
+    // 平均state充填率
+    let totalStateFillRate = 0;
+    for (const entity of entities) {
+      const fillRate = entity.state.getData().length / entity.state.capacity;
+      totalStateFillRate += fillRate;
+    }
+    const avgStateFillRate = entities.length > 0 ? totalStateFillRate / entities.length : 0;
+    
+    // 情報多様性（ユニークなstateハッシュ数）
+    const stateHashes = new Set<string>();
+    for (const entity of entities) {
+      const data = entity.state.getData();
+      if (data.length > 0) {
+        // 簡易ハッシュ: 先頭8バイトを文字列化
+        const hashBytes = data.slice(0, Math.min(8, data.length));
+        stateHashes.add(Array.from(hashBytes).join(','));
+      }
+    }
+    
+    const informationTransfer = {
+      avgStateFillRate,
+      exchangeCount: interactionEvents.filter(e => (e.exchangedBytesA ?? 0) > 0 || (e.exchangedBytesB ?? 0) > 0).length,
+      inheritanceCount: replicationEvents.filter(e => (e.inheritedBytes ?? 0) > 0).length,
+      acquisitionCount: repairEvents.filter(e => (e.acquiredBytes ?? 0) > 0).length,
+      diversity: stateHashes.size,
     };
 
     return {
@@ -1249,6 +1314,8 @@ export class Universe {
       spatialGini,
       // 知識関連メトリクス
       knowledge,
+      // 情報伝達メトリクス
+      informationTransfer,
     };
   }
 
