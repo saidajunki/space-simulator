@@ -1471,6 +1471,14 @@ export class Universe {
   }
 
   /**
+   * イベントログをクリア（メモリ管理用）
+   * 各tick処理後にRunnerから呼び出される
+   */
+  clearEventLog(): void {
+    this.eventLog = [];
+  }
+
+  /**
    * Entity取得
    */
   getEntity(id: EntityId): Entity | undefined {

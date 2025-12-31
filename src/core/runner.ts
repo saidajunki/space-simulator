@@ -131,13 +131,15 @@ export class LocalRunner {
         const stats = this.universe.getStats();
         this.observation.recordStats(stats);
 
-        // イベント記録
-        for (const event of this.universe.getEventLog().slice(-100)) {
-          if (event.tick === tick) {
-            this.observation.logEvent(event);
-            callbacks?.onEvent?.(event);
-          }
+        // イベント記録（現在のtickのイベントのみを取得）
+        const currentTickEvents = this.universe.getEventLog().filter(e => e.tick === tick);
+        for (const event of currentTickEvents) {
+          this.observation.logEvent(event);
+          callbacks?.onEvent?.(event);
         }
+        
+        // メモリ管理: イベントログをクリア（Observationに記録済み）
+        this.universe.clearEventLog();
 
         // コールバック
         if (tick % this.input.logFrequency === 0) {
@@ -363,7 +365,7 @@ export class BatchRunner {
     for (let i = 0; i < seeds.length; i += parallel) {
       const batch = seeds.slice(i, i + parallel);
       const batchResults = await Promise.all(
-        batch.map((seed, j) => {
+        batch.map((seed) => {
           const runner = new LocalRunner();
           runner.initialize({
             ...baseInput,
