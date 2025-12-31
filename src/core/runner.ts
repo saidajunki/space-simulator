@@ -113,6 +113,14 @@ export class LocalRunner {
     let exitReason: 'maxTicks' | 'extinction' | 'userStop' | 'error' = 'maxTicks';
 
     try {
+      // tick 0のイベントを記録（初期化時に生成されたentityCreatedなど）
+      const initialEvents = this.universe.getEventLog();
+      for (const event of initialEvents) {
+        this.observation.logEvent(event);
+        callbacks?.onEvent?.(event);
+      }
+      this.universe.clearEventLog();
+
       while (this.universe.time.getTick() < this.input.maxTicks) {
         if (this.isStopped) {
           exitReason = 'userStop';

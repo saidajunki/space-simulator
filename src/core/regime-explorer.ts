@@ -186,19 +186,20 @@ export class RegimeExplorer {
       },
       seed,
       maxTicks: this.config.maxTicks,
-      logFrequency: this.config.maxTicks, // ログは最後だけ
+      logFrequency: 1, // 毎tickでコールバックを呼ぶ（累積のため）
       snapshotFrequency: this.config.maxTicks * 10, // スナップショットなし
     };
 
     const runner = new LocalRunner();
     runner.initialize(input);
     
-    // 統計を収集
+    // 統計を累積収集
     let totalReplicationCount = 0;
     let totalInteractionCount = 0;
     
     const output = runner.run({
       onTick: (_tick, stats) => {
+        // 各tickの値を累積（statsは「このtick」の値を含む）
         totalReplicationCount += stats.replicationCount ?? 0;
         totalInteractionCount += stats.interactionCount ?? 0;
       },

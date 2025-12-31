@@ -426,6 +426,11 @@ export class Universe {
         continue;
       }
 
+      // エネルギー枯渇: エネルギーが0以下の個体は行動できない（死亡判定で処理される）
+      if (entity.energy <= 0) {
+        continue;
+      }
+
       // 維持者ステータスの期限切れをクリア
       if (entity.maintainerUntilTick && entity.maintainerUntilTick <= tick) {
         entity.maintainerUntilTick = undefined;
