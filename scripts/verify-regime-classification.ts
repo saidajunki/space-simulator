@@ -127,6 +127,7 @@ function runSimulation(seed: number, regenRate: number, ticks: number, windowSiz
       if (event.type === 'replication') windowReplications++;
       if (event.type === 'entityDied') windowDeaths++;
     }
+    universe.clearEventLog();
     
     // 時間窓の終了
     if ((t + 1) % windowSize === 0) {

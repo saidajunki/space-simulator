@@ -56,6 +56,7 @@ function runSimulation(initialPopulation: number, seed: number, ticks: number): 
         cooperativeReplications++;
       }
     }
+    universe.clearEventLog();
   }
 
   const stats = universe.getStats();

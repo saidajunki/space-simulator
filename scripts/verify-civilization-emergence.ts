@@ -106,6 +106,7 @@ function runLongTermSimulation(seed: number, totalTicks: number, windowSize: num
         }
       }
     }
+    universe.clearEventLog();
     
     // 時間窓ごとに統計を記録
     if ((t + 1) % windowSize === 0) {

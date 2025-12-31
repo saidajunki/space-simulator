@@ -102,6 +102,7 @@ function runSimulation(seed: number, ticks: number): SurvivalAnalysis {
         entityDeathTick.set(diedEvent.entityId, t);
       }
     }
+    universe.clearEventLog();
   }
 
   // 生存率を計算

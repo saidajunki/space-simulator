@@ -101,6 +101,7 @@ function runSimulation(seed: number, ticks: number): InformationBehaviorAnalysis
           break;
       }
     }
+    universe.clearEventLog();
   }
 
   // 最終状態のエンティティからスキル値を取得

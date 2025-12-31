@@ -115,6 +115,7 @@ function runSimulation(seed: number, ticks: number): AffluenceAnalysis {
         entityPrestige.set(childId, 0);
       }
     }
+    universe.clearEventLog();
   }
 
   // 協力複製と単独複製を分離

@@ -44,6 +44,7 @@ function runSimulation(seed: number, skillBonusEnabled: boolean, ticks: number):
       if (event.type === 'replication') totalReplications++;
       if (event.type === 'entityDied') totalDeaths++;
     }
+    universe.clearEventLog();
   }
 
   const stats = universe.getStats();

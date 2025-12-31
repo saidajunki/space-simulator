@@ -78,6 +78,7 @@ function runSimulation(seed: number, initialPopulation: number, ticks: number): 
         totalInteractions++;
       }
     }
+    universe.clearEventLog();
   }
 
   const avgPopulation = totalPopulation / samples;

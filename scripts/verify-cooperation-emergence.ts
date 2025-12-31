@@ -85,6 +85,7 @@ function runSimulation(seed: number, ticks: number): SimulationResult {
         cooperativeReplications++;
       }
     }
+    universe.clearEventLog();
   }
 
   // 空間分布を取得

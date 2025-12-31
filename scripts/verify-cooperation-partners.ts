@@ -96,6 +96,7 @@ function runSimulation(seed: number, ticks: number): PartnerAnalysis {
         entityBirthTick.set(replicationEvent.childId, t);
       }
     }
+    universe.clearEventLog();
   }
 
   if (partnerPairs.length === 0) {
