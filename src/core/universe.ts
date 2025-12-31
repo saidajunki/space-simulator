@@ -526,6 +526,13 @@ export class Universe {
     const isMaintainer = entity.maintainerUntilTick !== undefined && entity.maintainerUntilTick > tick;
     features[FeatureIndex.IsMaintainer] = isMaintainer ? 1 : 0;
     
+    // State特徴量（情報→行動接続）: stateの最初の4バイトを0-1に正規化
+    const stateData = entity.state.getData();
+    features[FeatureIndex.StateFeature0] = (stateData[0] ?? 0) / 255;
+    features[FeatureIndex.StateFeature1] = (stateData[1] ?? 0) / 255;
+    features[FeatureIndex.StateFeature2] = (stateData[2] ?? 0) / 255;
+    features[FeatureIndex.StateFeature3] = (stateData[3] ?? 0) / 255;
+    
     // バイアス項
     features[FeatureIndex.Bias] = 1;
     

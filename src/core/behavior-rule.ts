@@ -50,12 +50,20 @@ export enum FeatureIndex {
   HasDamagedArtifact = 6,
   /** 維持者ステータス */
   IsMaintainer = 7,
+  /** State特徴量0（情報→行動接続） */
+  StateFeature0 = 8,
+  /** State特徴量1（情報→行動接続） */
+  StateFeature1 = 9,
+  /** State特徴量2（情報→行動接続） */
+  StateFeature2 = 10,
+  /** State特徴量3（情報→行動接続） */
+  StateFeature3 = 11,
   /** バイアス項（常に1） */
-  Bias = 8,
+  Bias = 12,
 }
 
 /** 特徴量の数 */
-export const FEATURE_COUNT = 9;
+export const FEATURE_COUNT = 13;
 
 /**
  * 行動タイプインデックス
