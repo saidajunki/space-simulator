@@ -29,6 +29,7 @@ import {
   exchangeInformation,
   acquireInformation,
 } from './information-transfer.js';
+import { extractSkills, SkillIndex, calculateSkillBonus, SKILL_COUNT, DEFAULT_SKILL_BONUS_COEFFICIENT } from './skill.js';
 
 const BEACON_DURABILITY_THRESHOLD = 0.5;
 const BEACON_SCALE = 1.0;
@@ -73,6 +74,10 @@ export interface UniverseConfig {
   toolEffectEnabled: boolean;
   /** 知識ボーナス（情報一致度による修復効率向上）を有効にするか */
   knowledgeBonusEnabled: boolean;
+  /** スキルボーナス（stateパターンによる行動効率向上）を有効にするか */
+  skillBonusEnabled: boolean;
+  /** スキルボーナス係数（スキル値1.0あたりの追加倍率、デフォルト: 0.5） */
+  skillBonusCoefficient: number;
   /** 情報伝達設定 */
   informationTransfer: InformationTransferConfig;
 }
@@ -89,6 +94,8 @@ export const DEFAULT_UNIVERSE_CONFIG: UniverseConfig = {
   wasteHeatRadiationRate: 0.3,
   toolEffectEnabled: true,  // デフォルトはON
   knowledgeBonusEnabled: true,  // デフォルトはON
+  skillBonusEnabled: true,  // デフォルトはON
+  skillBonusCoefficient: DEFAULT_SKILL_BONUS_COEFFICIENT,  // デフォルト: 0.5
   informationTransfer: DEFAULT_INFORMATION_TRANSFER_CONFIG,
 };
 
@@ -896,15 +903,25 @@ export class Universe {
 
   /**
    * Artifact生成実行
+   * スキルボーナス: stateパターンによるコスト低減
    */
   private executeCreateArtifact(entity: Entity, data: Uint8Array | null, tick: number): void {
+    // スキルボーナス（stateパターンによるコスト低減）
+    const skillBonus = this.config.skillBonusEnabled
+      ? calculateSkillBonus(extractSkills(entity.state.getData())[SkillIndex.Create] ?? 0, this.config.skillBonusCoefficient)
+      : 1.0;
+    
+    // スキルボーナスが高いほどコストが下がる（1.0〜1.5 → コスト係数1.0〜0.67）
+    const costMultiplier = 1.0 / skillBonus;
+    
     const result = this.artifactManager.create(
       entity.id,
       entity.nodeId,
       data || new Uint8Array(0),
       entity.energy,
       tick,
-      this.rng
+      this.rng,
+      costMultiplier
     );
 
     if (result.success && result.artifact) {
@@ -922,6 +939,7 @@ export class Universe {
         type: 'artifactCreated',
         artifactId: result.artifact.id,
         nodeId: entity.nodeId,
+        skillBonus,
         tick,
       });
     }
@@ -930,6 +948,7 @@ export class Universe {
   /**
    * Artifact修復実行
    * 情報→行動の接続: entity.stateとartifact.dataの一致度が修復効率に影響
+   * スキルボーナス: stateパターンによる効率向上
    */
   private executeRepairArtifact(entity: Entity, artifactId: ArtifactId, cost: number, tick: number): void {
     const artifact = this.artifactManager.get(artifactId);
@@ -943,10 +962,15 @@ export class Universe {
       ? calculateKnowledgeBonus(similarity) 
       : 1.0;
 
+    // スキルボーナス（stateパターンによる効率向上）
+    const skillBonus = this.config.skillBonusEnabled
+      ? calculateSkillBonus(extractSkills(entity.state.getData())[SkillIndex.Repair] ?? 0, this.config.skillBonusCoefficient)
+      : 1.0;
+
     const durabilityBefore = artifact.durability;
-    // ボーナスを適用した修復量
+    // ボーナスを適用した修復量（知識ボーナス × スキルボーナス）
     const baseRepairGain = Math.min(1 - artifact.durability, cost / REPAIR_ENERGY_PER_DURABILITY);
-    const repairGain = baseRepairGain * knowledgeBonus;
+    const repairGain = baseRepairGain * knowledgeBonus * skillBonus;
     const repairResult = this.artifactManager.repair(artifactId, repairGain, cost);
 
     if (!repairResult.success) {
@@ -974,6 +998,7 @@ export class Universe {
       durabilityAfter: repairResult.after,
       similarity,
       knowledgeBonus,
+      skillBonus,
       acquiredBytes: acquisitionResult.acquiredBytes,
       tick,
     });
@@ -990,6 +1015,7 @@ export class Universe {
    * 資源採取実行
    * 公理19: タイプごとのharvestEfficiencyを反映
    * アーティファクトによる局所効果（採取効率向上）を追加
+   * スキルボーナス: stateパターンによる効率向上
    */
   private executeHarvest(entity: Entity, amount: number, tick: number): void {
     const node = this.space.getNode(entity.nodeId);
@@ -1002,7 +1028,13 @@ export class Universe {
     
     // アーティファクトによる局所効果（採取効率ボーナス）
     const artifactBonus = this.calculateArtifactHarvestBonus(entity.nodeId);
-    const efficiency = baseEfficiency * (1 + artifactBonus);
+    
+    // スキルボーナス（stateパターンによる効率向上）
+    const skillBonus = this.config.skillBonusEnabled
+      ? calculateSkillBonus(extractSkills(entity.state.getData())[SkillIndex.Harvest] ?? 0, this.config.skillBonusCoefficient)
+      : 1.0;
+    
+    const efficiency = baseEfficiency * (1 + artifactBonus) * skillBonus;
     
     // 効率を反映した採取量
     const adjustedAmount = amount * efficiency;
@@ -1014,6 +1046,7 @@ export class Universe {
         entityId: entity.id,
         nodeId: entity.nodeId,
         amount: harvested,
+        skillBonus,
         tick,
       });
     }
@@ -1243,7 +1276,7 @@ export class Universe {
     // 知識関連メトリクス（情報→行動の接続）
     const repairEvents = this.eventLog.filter(
       e => e.type === 'artifactRepaired' && e.tick === tick
-    ) as Array<{ type: 'artifactRepaired'; similarity: number; knowledgeBonus: number; acquiredBytes?: number }>;
+    ) as Array<{ type: 'artifactRepaired'; similarity: number; knowledgeBonus: number; skillBonus?: number; acquiredBytes?: number }>;
     const knowledge = {
       avgSimilarity: repairEvents.length > 0
         ? repairEvents.reduce((sum, e) => sum + e.similarity, 0) / repairEvents.length
@@ -1287,6 +1320,59 @@ export class Universe {
       diversity: stateHashes.size,
     };
 
+    // スキルシステムメトリクス
+    const skillVectors: Float32Array[] = [];
+    for (const entity of entities) {
+      skillVectors.push(extractSkills(entity.state.getData()));
+    }
+    
+    // 平均スキル値
+    const avgSkills = new Array(SKILL_COUNT).fill(0);
+    if (skillVectors.length > 0) {
+      for (const skills of skillVectors) {
+        for (let i = 0; i < SKILL_COUNT; i++) {
+          avgSkills[i] += skills[i] ?? 0;
+        }
+      }
+      for (let i = 0; i < SKILL_COUNT; i++) {
+        avgSkills[i] /= skillVectors.length;
+      }
+    }
+    
+    // スキル分散
+    const skillVariance = new Array(SKILL_COUNT).fill(0);
+    if (skillVectors.length > 0) {
+      for (const skills of skillVectors) {
+        for (let i = 0; i < SKILL_COUNT; i++) {
+          const diff = (skills[i] ?? 0) - avgSkills[i];
+          skillVariance[i] += diff * diff;
+        }
+      }
+      for (let i = 0; i < SKILL_COUNT; i++) {
+        skillVariance[i] /= skillVectors.length;
+      }
+    }
+    
+    // ボーナス適用回数（このtickのイベントから集計）
+    const harvestEvents = this.eventLog.filter(
+      e => e.type === 'harvest' && e.tick === tick
+    ) as Array<{ type: 'harvest'; skillBonus?: number }>;
+    const createEvents = this.eventLog.filter(
+      e => e.type === 'artifactCreated' && e.tick === tick
+    ) as Array<{ type: 'artifactCreated'; skillBonus?: number }>;
+    
+    const bonusApplications: Record<string, number> = {
+      harvest: harvestEvents.filter(e => (e.skillBonus ?? 1.0) > 1.0).length,
+      repair: repairEvents.filter(e => (e.skillBonus ?? 1.0) > 1.0).length,
+      create: createEvents.filter(e => (e.skillBonus ?? 1.0) > 1.0).length,
+    };
+    
+    const skills = {
+      avgSkills,
+      skillVariance,
+      bonusApplications,
+    };
+
     return {
       tick,
       entityCount: entities.length,
@@ -1316,6 +1402,8 @@ export class Universe {
       knowledge,
       // 情報伝達メトリクス
       informationTransfer,
+      // スキルシステムメトリクス
+      skills,
     };
   }
 

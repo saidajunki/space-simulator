@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react';
-import { Application, Graphics, Container } from 'pixi.js';
+import { Application, Graphics, Container, Text, TextStyle } from 'pixi.js';
 import type { SimulationState, EntityState } from '../hooks/useSimulation';
 
 interface WorldCanvasProps {
@@ -20,36 +20,31 @@ const TYPE_COLORS = [
   0x6366f1, // indigo
 ];
 
-// 資源量に応じた色（緑→黄→赤）
+// 資源量に応じた色（暗い茶色→緑）
 function resourceColor(resources: number, maxResources: number = 200): number {
-  const ratio = Math.min(1, resources / maxResources);
-  if (ratio > 0.5) {
-    // 緑→黄
-    const t = (ratio - 0.5) * 2;
-    const r = Math.floor(255 * (1 - t));
-    const g = 255;
-    return (r << 16) | (g << 8) | 0;
-  } else {
-    // 黄→赤
-    const t = ratio * 2;
-    const r = 255;
-    const g = Math.floor(255 * t);
-    return (r << 16) | (g << 8) | 0;
-  }
+  const ratio = Math.min(1, Math.max(0, resources / maxResources));
+  const r1 = 0x3d, g1 = 0x28, b1 = 0x17;
+  const r2 = 0x22, g2 = 0x8b, b2 = 0x22;
+  const r = Math.floor(r1 + (r2 - r1) * ratio);
+  const g = Math.floor(g1 + (g2 - g1) * ratio);
+  const b = Math.floor(b1 + (b2 - b1) * ratio);
+  return (r << 16) | (g << 8) | b;
 }
 
 export function WorldCanvas({ state }: WorldCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const graphicsRef = useRef<{
+    terrain: Graphics;
+    sunlight: Graphics;
+    heatOverlay: Graphics;
     edges: Graphics;
-    nodes: Graphics;
     entities: Graphics;
     artifacts: Graphics;
     labels: Container;
   } | null>(null);
+  const gridRef = useRef<{ cols: number; rows: number; cellSize: number } | null>(null);
 
-  // Pixi.js初期化
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -58,7 +53,7 @@ export function WorldCanvas({ state }: WorldCanvasProps) {
       await app.init({
         width: containerRef.current!.clientWidth,
         height: containerRef.current!.clientHeight,
-        backgroundColor: 0x0f0f23,
+        backgroundColor: 0x1a1a2e,
         antialias: true,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
@@ -67,20 +62,23 @@ export function WorldCanvas({ state }: WorldCanvasProps) {
       containerRef.current!.appendChild(app.canvas);
       appRef.current = app;
 
-      // グラフィックスレイヤー作成
+      const terrain = new Graphics();
+      const sunlight = new Graphics();   // 太陽光エフェクト
+      const heatOverlay = new Graphics();
       const edges = new Graphics();
-      const nodes = new Graphics();
-      const entities = new Graphics();
       const artifacts = new Graphics();
+      const entities = new Graphics();
       const labels = new Container();
 
+      app.stage.addChild(terrain);
+      app.stage.addChild(sunlight);
+      app.stage.addChild(heatOverlay);
       app.stage.addChild(edges);
-      app.stage.addChild(nodes);
       app.stage.addChild(artifacts);
       app.stage.addChild(entities);
       app.stage.addChild(labels);
 
-      graphicsRef.current = { edges, nodes, entities, artifacts, labels };
+      graphicsRef.current = { terrain, sunlight, heatOverlay, edges, entities, artifacts, labels };
     };
 
     initPixi();
@@ -93,7 +91,6 @@ export function WorldCanvas({ state }: WorldCanvasProps) {
     };
   }, []);
 
-  // リサイズ対応
   useEffect(() => {
     const handleResize = () => {
       if (appRef.current && containerRef.current) {
@@ -101,72 +98,160 @@ export function WorldCanvas({ state }: WorldCanvasProps) {
           containerRef.current.clientWidth,
           containerRef.current.clientHeight
         );
+        gridRef.current = null;
       }
     };
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 描画更新
+  const calculateGrid = useCallback((nodeCount: number, width: number, height: number) => {
+    const aspectRatio = width / height;
+    const cols = Math.ceil(Math.sqrt(nodeCount * aspectRatio));
+    const rows = Math.ceil(nodeCount / cols);
+    const cellWidth = width / cols;
+    const cellHeight = height / rows;
+    const cellSize = Math.min(cellWidth, cellHeight);
+    return { cols, rows, cellSize };
+  }, []);
+
+  const getNodePosition = useCallback((index: number, grid: { cols: number; rows: number; cellSize: number }, width: number, height: number) => {
+    const col = index % grid.cols;
+    const row = Math.floor(index / grid.cols);
+    const offsetX = (width - grid.cols * grid.cellSize) / 2;
+    const offsetY = (height - grid.rows * grid.cellSize) / 2;
+    return {
+      x: offsetX + col * grid.cellSize + grid.cellSize / 2,
+      y: offsetY + row * grid.cellSize + grid.cellSize / 2,
+      cellSize: grid.cellSize,
+    };
+  }, []);
+
   const draw = useCallback((state: SimulationState) => {
-    if (!graphicsRef.current) return;
+    if (!graphicsRef.current || !appRef.current) return;
 
-    const { edges, nodes, entities, artifacts, labels } = graphicsRef.current;
-    const nodeMap = new Map(state.nodes.map(n => [n.id, n]));
+    const { terrain, sunlight, heatOverlay, edges, entities, artifacts, labels } = graphicsRef.current;
+    const width = appRef.current.screen.width;
+    const height = appRef.current.screen.height;
 
-    // クリア
+    if (!gridRef.current) {
+      gridRef.current = calculateGrid(state.nodes.length, width, height);
+    }
+    const grid = gridRef.current;
+
+    const nodePositions = new Map(state.nodes.map((n, i) => {
+      const pos = getNodePosition(i, grid, width, height);
+      return [n.id, pos];
+    }));
+
+    terrain.clear();
+    sunlight.clear();
+    heatOverlay.clear();
     edges.clear();
-    nodes.clear();
     entities.clear();
     artifacts.clear();
     labels.removeChildren();
 
+    const padding = 4;
+    const cellInner = grid.cellSize - padding * 2;
+
+    // 地形描画
+    for (const node of state.nodes) {
+      const pos = nodePositions.get(node.id);
+      if (!pos) continue;
+      const color = resourceColor(node.resources);
+      const x = pos.x - cellInner / 2;
+      const y = pos.y - cellInner / 2;
+      terrain.roundRect(x, y, cellInner, cellInner, 4);
+      terrain.fill({ color, alpha: 0.9 });
+      const borderWidth = 1 + Math.min(3, node.entityCount * 0.5);
+      terrain.roundRect(x, y, cellInner, cellInner, 4);
+      terrain.stroke({ width: borderWidth, color: 0x4a5568, alpha: 0.5 });
+    }
+
+    // 太陽光エフェクト（資源回復量を可視化）
+    for (const node of state.nodes) {
+      const pos = nodePositions.get(node.id);
+      if (!pos) continue;
+      
+      // 回復量 = (容量 - 現在値) * 0.008
+      const capacity = node.resourceCapacity || 200;
+      const regeneration = (capacity - node.resources) * 0.008;
+      
+      if (regeneration > 0.1) {
+        // 上から降り注ぐ光線
+        const intensity = Math.min(1, regeneration / 2);
+        const rayWidth = cellInner * 0.3;
+        const x = pos.x;
+        const y = pos.y - cellInner / 2;
+        
+        // 光線（上から）
+        sunlight.moveTo(x - rayWidth / 2, 0);
+        sunlight.lineTo(x - rayWidth / 4, y);
+        sunlight.lineTo(x + rayWidth / 4, y);
+        sunlight.lineTo(x + rayWidth / 2, 0);
+        sunlight.closePath();
+        sunlight.fill({ color: 0xffd700, alpha: intensity * 0.15 });
+        
+        // セル上部のグロー
+        sunlight.circle(x, y, cellInner * 0.4);
+        sunlight.fill({ color: 0xffd700, alpha: intensity * 0.2 });
+      }
+    }
+
+    // 廃熱オーバーレイ
+    for (const node of state.nodes) {
+      const pos = nodePositions.get(node.id);
+      if (!pos || node.wasteHeat < 1) continue;
+      const alpha = Math.min(0.6, node.wasteHeat / 100);
+      const x = pos.x - cellInner / 2;
+      const y = pos.y - cellInner / 2;
+      heatOverlay.roundRect(x, y, cellInner, cellInner, 4);
+      heatOverlay.fill({ color: 0xff4444, alpha });
+    }
+
     // エッジ描画
     for (const edge of state.edges) {
-      const from = nodeMap.get(edge.from);
-      const to = nodeMap.get(edge.to);
+      const from = nodePositions.get(edge.from);
+      const to = nodePositions.get(edge.to);
       if (from && to) {
         edges.moveTo(from.x, from.y);
         edges.lineTo(to.x, to.y);
-        edges.stroke({ width: 1, color: 0x1e3a5f, alpha: 0.5 });
+        edges.stroke({ width: 1, color: 0x2d3748, alpha: 0.3 });
       }
     }
 
-    // ノード描画
-    for (const node of state.nodes) {
-      const radius = 20 + Math.min(20, node.entityCount * 2);
-      const color = resourceColor(node.resources);
-      
-      // ノード本体
-      nodes.circle(node.x, node.y, radius);
-      nodes.fill({ color, alpha: 0.3 });
-      nodes.stroke({ width: 2, color, alpha: 0.8 });
-      
-      // Beacon効果（グロー）
-      if (node.beaconStrength > 0) {
-        const glowRadius = radius + Math.min(30, node.beaconStrength * 0.5);
-        nodes.circle(node.x, node.y, glowRadius);
-        nodes.fill({ color: 0xfbbf24, alpha: 0.1 });
-      }
-    }
-
-    // アーティファクト描画（星形）
+    // アーティファクト描画
+    const artifactsByNode = new Map<string, typeof state.artifacts>();
     for (const artifact of state.artifacts) {
-      const node = nodeMap.get(artifact.nodeId);
-      if (!node) continue;
-      
-      const size = 5 + Math.min(15, artifact.prestige * 0.1);
-      const alpha = 0.5 + artifact.durability * 0.5;
-      
-      // 星形を描画
-      drawStar(artifacts, node.x, node.y - 15, size, 5, 0.5);
-      artifacts.fill({ color: 0xfbbf24, alpha });
-      
-      // 高Prestigeはグロー
-      if (artifact.prestige > 50) {
-        drawStar(artifacts, node.x, node.y - 15, size + 5, 5, 0.5);
-        artifacts.fill({ color: 0xfbbf24, alpha: 0.2 });
+      const list = artifactsByNode.get(artifact.nodeId) ?? [];
+      list.push(artifact);
+      artifactsByNode.set(artifact.nodeId, list);
+    }
+
+    for (const [nodeId, nodeArtifacts] of artifactsByNode) {
+      const pos = nodePositions.get(nodeId);
+      if (!pos) continue;
+      const maxShow = Math.min(4, nodeArtifacts.length);
+      const artSize = Math.min(8, cellInner / 4);
+      for (let i = 0; i < maxShow; i++) {
+        const artifact = nodeArtifacts[i]!;
+        const ax = pos.x - cellInner / 4 + (i % 2) * artSize * 1.5;
+        const ay = pos.y - cellInner / 4 + Math.floor(i / 2) * artSize * 1.5;
+        const alpha = 0.5 + artifact.durability * 0.5;
+        const size = artSize * (0.5 + Math.min(0.5, artifact.prestige / 100));
+        drawStar(artifacts, ax, ay, size, 4, 0.5);
+        artifacts.fill({ color: 0xfbbf24, alpha });
+        if (artifact.prestige > 30) {
+          artifacts.circle(ax, ay, size + 4);
+          artifacts.fill({ color: 0xfbbf24, alpha: 0.15 });
+        }
+      }
+      if (nodeArtifacts.length > 4) {
+        const label = new Text({ text: `+${nodeArtifacts.length - 4}`, style: new TextStyle({ fontSize: 10, fill: 0xfbbf24, fontFamily: 'monospace' }) });
+        label.x = pos.x + cellInner / 4 - 10;
+        label.y = pos.y + cellInner / 4 - 10;
+        labels.addChild(label);
       }
     }
 
@@ -179,62 +264,64 @@ export function WorldCanvas({ state }: WorldCanvasProps) {
     }
 
     for (const [nodeId, nodeEntities] of entityByNode) {
-      const node = nodeMap.get(nodeId);
-      if (!node) continue;
-
+      const pos = nodePositions.get(nodeId);
+      if (!pos) continue;
       const count = nodeEntities.length;
-      const angleStep = (2 * Math.PI) / Math.max(count, 1);
-      const baseRadius = 25 + Math.min(15, count);
+      const maxShow = Math.min(16, count);
+      const entitySize = Math.max(3, Math.min(6, cellInner / 8));
+      const gridSize = Math.ceil(Math.sqrt(maxShow));
+      const spacing = cellInner / (gridSize + 1);
 
-      nodeEntities.forEach((entity, i) => {
-        const angle = angleStep * i;
-        const x = node.x + baseRadius * Math.cos(angle);
-        const y = node.y + baseRadius * Math.sin(angle);
+      for (let i = 0; i < maxShow; i++) {
+        const entity = nodeEntities[i]!;
+        const col = i % gridSize;
+        const row = Math.floor(i / gridSize);
+        const ex = pos.x - cellInner / 2 + spacing * (col + 1);
+        const ey = pos.y - cellInner / 2 + spacing * (row + 1);
         const color = TYPE_COLORS[entity.type % TYPE_COLORS.length] ?? 0x3b82f6;
-        const alpha = 0.3 + Math.min(0.7, entity.energy / 100);
-        const radius = 4;
-
-        entities.circle(x, y, radius);
+        const alpha = 0.4 + Math.min(0.6, entity.energy / 100);
+        entities.circle(ex, ey, entitySize);
         entities.fill({ color, alpha });
-
-        // 維持者はグロー
         if (entity.isMaintainer) {
-          entities.circle(x, y, radius + 3);
-          entities.fill({ color: 0xfbbf24, alpha: 0.3 });
+          entities.circle(ex, ey, entitySize + 2);
+          entities.stroke({ width: 1.5, color: 0xfbbf24, alpha: 0.8 });
         }
-      });
-    }
-  }, []);
+      }
 
-  // state変更時に再描画
-  useEffect(() => {
-    if (state) {
-      draw(state);
+      if (count > 16) {
+        const label = new Text({ text: `${count}`, style: new TextStyle({ fontSize: 11, fill: 0xffffff, fontFamily: 'monospace', fontWeight: 'bold' }) });
+        label.x = pos.x - 8;
+        label.y = pos.y + cellInner / 2 - 14;
+        labels.addChild(label);
+      }
     }
+
+    // 資源量ラベル
+    for (const node of state.nodes) {
+      const pos = nodePositions.get(node.id);
+      if (!pos) continue;
+      const resLabel = new Text({ text: `${Math.floor(node.resources)}`, style: new TextStyle({ fontSize: 9, fill: 0x94a3b8, fontFamily: 'monospace' }) });
+      resLabel.x = pos.x + cellInner / 2 - 20;
+      resLabel.y = pos.y + cellInner / 2 - 12;
+      labels.addChild(resLabel);
+    }
+  }, [calculateGrid, getNodePosition]);
+
+  useEffect(() => {
+    if (state) draw(state);
   }, [state, draw]);
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 }
 
-// 星形を描画するヘルパー
-function drawStar(
-  graphics: Graphics,
-  cx: number,
-  cy: number,
-  outerRadius: number,
-  points: number,
-  innerRatio: number
-) {
+function drawStar(graphics: Graphics, cx: number, cy: number, outerRadius: number, points: number, innerRatio: number) {
   const innerRadius = outerRadius * innerRatio;
   const step = Math.PI / points;
-
   graphics.moveTo(cx, cy - outerRadius);
-
   for (let i = 0; i < points * 2; i++) {
     const radius = i % 2 === 0 ? outerRadius : innerRadius;
     const angle = -Math.PI / 2 + step * i;
     graphics.lineTo(cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
   }
-
   graphics.closePath();
 }

@@ -80,10 +80,14 @@ export class ArtifactManager {
     data: Uint8Array,
     creatorEnergy: number,
     currentTick: number,
-    rng: RandomGenerator
+    rng: RandomGenerator,
+    costMultiplier: number = 1.0
   ): CreateArtifactResult {
+    // スキルボーナスによるコスト調整
+    const adjustedCost = this.config.energyCost * costMultiplier;
+    
     // エネルギーチェック
-    if (creatorEnergy < this.config.energyCost) {
+    if (creatorEnergy < adjustedCost) {
       return {
         success: false,
         artifact: null,
@@ -107,7 +111,7 @@ export class ArtifactManager {
       nodeId,
       data: new Uint8Array(data),
       durability: this.config.initialDurability,
-      prestige: this.config.energyCost, // 生成時の消費エネルギーをPrestigeに積む
+      prestige: adjustedCost, // 生成時の消費エネルギーをPrestigeに積む
       createdAt: currentTick,
       creatorId,
     };
@@ -117,7 +121,7 @@ export class ArtifactManager {
     return {
       success: true,
       artifact,
-      energyConsumed: this.config.energyCost,
+      energyConsumed: adjustedCost,
     };
   }
 

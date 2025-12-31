@@ -14,12 +14,12 @@ export type SimulationEvent =
   | { type: 'entityMoved'; entityId: EntityId; from: NodeId; to: NodeId; tick: number }
   | { type: 'interaction'; initiator: EntityId; target: EntityId; tick: number; exchangedBytesA?: number; exchangedBytesB?: number }
   | { type: 'replication'; parentId: EntityId; childId: EntityId; tick: number; inheritedBytes?: number; mutatedBits?: number }
-  | { type: 'artifactCreated'; artifactId: string; nodeId: NodeId; tick: number }
+  | { type: 'artifactCreated'; artifactId: string; nodeId: NodeId; tick: number; skillBonus?: number }
   | { type: 'artifactDecayed'; artifactId: string; tick: number }
-  | { type: 'artifactRepaired'; entityId: EntityId; artifactId: ArtifactId; energyConsumed: number; durabilityBefore: number; durabilityAfter: number; similarity: number; knowledgeBonus: number; acquiredBytes?: number; tick: number }
+  | { type: 'artifactRepaired'; entityId: EntityId; artifactId: ArtifactId; energyConsumed: number; durabilityBefore: number; durabilityAfter: number; similarity: number; knowledgeBonus: number; skillBonus?: number; acquiredBytes?: number; tick: number }
   | { type: 'maintainerGranted'; entityId: EntityId; untilTick: number; tick: number }
   | { type: 'partnerSelected'; entityId: EntityId; partnerId: EntityId; isMaintainer: boolean; nodePrestige: number; tick: number }
-  | { type: 'harvest'; entityId: EntityId; nodeId: NodeId; amount: number; tick: number }
+  | { type: 'harvest'; entityId: EntityId; nodeId: NodeId; amount: number; tick: number; skillBonus?: number }
   | { type: 'disaster'; nodeId: NodeId; disasterType: string; tick: number }
   | { type: 'guardrailIntervention'; intervention: string; tick: number }
   // 公理21: 化学反応イベント
@@ -76,6 +76,15 @@ export interface SimulationStats {
     acquisitionCount: number;
     /** 情報多様性（ユニークなstateパターン数） */
     diversity: number;
+  };
+  // スキルシステムメトリクス
+  skills?: {
+    /** 平均スキル値（各スキルインデックスごと） */
+    avgSkills: number[];
+    /** スキル分散（各スキルインデックスごと） */
+    skillVariance: number[];
+    /** ボーナス適用回数（行動タイプごと） */
+    bonusApplications: Record<string, number>;
   };
 }
 
